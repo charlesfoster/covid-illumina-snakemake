@@ -212,13 +212,13 @@ rule qualimap:
         cmd = "qualimap bamqc -bam {0} -nt {1} -outdir {2} 2&> /dev/null".format(input.bam, threads,params.outdir)
         p = subprocess.Popen(cmd, shell= True, stdout= subprocess.PIPE, stderr= subprocess.PIPE)
         stdout, stderr= p.communicate()
-        if p.returncode != 0:
-            res = ['There is a 0% of reference with a coverageData >= 10X',
+        if 'Failed to run bamqc' in str(stderr):
+            res = ['BamQC report','There is a 0% of reference with a coverageData >= 10X',
             'number of reads = 0',
             'number of mapped bases = 0 bp',
             'NC_045512.2	29903	0	0	0']
-            if not os.path.exists(outdir):
-                os.makedirs(outdir)
+            if not os.path.exists(params.outdir):
+                os.makedirs(params.outdir)
             with open(output.report,'w') as f:
                 f.write("\n".join(map(str, res)))
 
