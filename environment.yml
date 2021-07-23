@@ -1,0 +1,32 @@
+name: CIS
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - bedtools
+  - bwa>=0.7.17
+  - fastp
+  - ivar
+  - kraken2
+  - pip
+  - python>=3.8
+  - qualimap
+  - r-base>=4.1
+  - r-ggplot2
+  - r-seqinr
+  - r-stringr
+  - r-optparse
+  - r-data.table
+  - r-dplyr
+  - r-ggpubr
+  - samtools
+  - snpeff
+  - seqmagick
+  - samtools==1.12
+  - snakemake-minimal>=5.13
+  - snpEff
+  - pip:
+    - pandas
+    - psutil
+prefix: /home/cfos/miniconda3/envs/CIS

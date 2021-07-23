@@ -1,0 +1,6 @@
+*
+.*
+!.gitignore
+!CIS/*
+!setup.py
+!environment.yml
