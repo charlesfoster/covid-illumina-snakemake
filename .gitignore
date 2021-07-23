@@ -2,6 +2,7 @@
 .*
 !README.md
 !.gitignore
+!CIS/
 !CIS/*
 !setup.py
 !environment.yml
