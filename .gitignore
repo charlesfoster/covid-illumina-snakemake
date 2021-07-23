@@ -4,5 +4,6 @@
 !.gitignore
 !CIS/
 !CIS/*
+!CIS/bin/*
 !setup.py
 !environment.yml

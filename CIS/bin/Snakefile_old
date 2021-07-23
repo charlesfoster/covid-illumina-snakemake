@@ -1,0 +1,386 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jul 21 15:43:06 2021
+
+@author: cfos
+"""
+###########
+# Libraries
+###########
+
+import os
+import re
+from datetime import date
+import pandas as pd
+import glob
+import yaml
+
+###############
+# Configuration
+###############
+
+READSDIR = config["reads_dir"]
+RESULT_DIR = config["outdir"]
+REFERENCE=config["reference"]
+SCHEME=config["scheme"]
+COVERAGE_SCRIPT=config["coverage_script"]
+CONVERTER = config["converter_script"]
+ISOLATES = config['isolates']
+
+SAMPLES = glob_wildcards(os.path.join(READSDIR,"{sample, (?!Undet).*}_L001_R1_001.fastq.gz")).sample
+MAIN_SAMPLES = glob_wildcards(os.path.join(READSDIR,"{sample, (?!Undet)(?!NC_).*}_L001_R1_001.fastq.gz")).sample
+
+if ISOLATES != False:
+    MAIN_SAMPLES = [i for i in MAIN_SAMPLES if any(b in i for b in ISOLATES)]
+
+NEG_SAMPLES = glob_wildcards(os.path.join(READSDIR,"{sample, (NEG_|NC_).*}_L001_R1_001.fastq.gz")).sample
+SCHEME_NAME = os.path.basename(SCHEME)
+
+if SCHEME_NAME == 'swift.bed':
+    IVAR_OFFSET = 5
+else:
+    IVAR_OFFSET = 0
+
+if not os.path.isfile(REFERENCE+'.fai'):
+    os.system("samtools faidx {} 2> /dev/null".format(REFERENCE))
+
+
+TODAY=date.today().strftime("%Y-%m-%d")
+
+#################
+# Desired outputs
+#################
+
+rule final_qc:
+    input:
+        snpEff_file  = expand(os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.annotated.vcf"), sample = MAIN_SAMPLES),
+        coverage_plot = expand(os.path.join(RESULT_DIR, "{sample}/coverage/{sample}.coverage_plots.pdf"), sample = MAIN_SAMPLES),
+        neg_reports = expand(os.path.join(RESULT_DIR, "{sample}.qc_results.csv"), sample = NEG_SAMPLES),
+        sample_reports = expand(os.path.join(RESULT_DIR, "{sample}.qc_results.csv"), sample = MAIN_SAMPLES)
+    message:
+        "Pipeline complete!"
+    run:
+        qc_files = glob.glob(RESULT_DIR+'/*qc_results.csv')
+        combined_csv = pd.concat([pd.read_csv(f) for f in qc_files ])
+        combined_csv.to_csv( os.path.join(RESULT_DIR,TODAY+"_QC.csv"), index=False, header=True)
+        with open(os.path.join(RESULT_DIR,"config.yaml"), 'w') as outfile:
+            yaml.dump(config, outfile, default_flow_style=False)
+
+
+########################
+# Rules - common
+########################
+
+rule fastp:
+    input:
+        r1 = os.path.join(READSDIR,"{sample}_L001_R1_001.fastq.gz"),
+        r2 = os.path.join(READSDIR,"{sample}_L001_R2_001.fastq.gz")
+    output:
+        fq1  = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R1.fq.gz"),
+        fq2  = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R2.fq.gz"),
+        html = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_fastp.html"),
+        json = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_fastp.json")
+    message:"trimming {wildcards.sample} reads"
+    threads: 4
+    log:
+        os.path.join(RESULT_DIR,"{sample}/fastp/{sample}.log.txt")
+    params:
+        sampleName = "{sample}",
+        qualified_quality_phred = 20,
+        cut_mean_quality = 20,
+        unqualified_percent_limit = 10,
+        length_required = 50
+    resources: cpus=4
+    shell:
+        """
+        touch {output.fq2}
+        fastp --thread 4 \
+        --detect_adapter_for_pe \
+        --cut_front \
+        --cut_tail \
+        --trim_poly_x \
+        --cut_mean_quality 20 \
+        --qualified_quality_phred {params.qualified_quality_phred} \
+        --unqualified_percent_limit {params.unqualified_percent_limit} \
+        --correction \
+        --length_required 50 \
+        --html {output.html} \
+        --json {output.json} \
+        -i {input.r1} \
+        -I {input.r2} \
+        -o {output.fq1} \
+        -O {output.fq2} \
+        2>{log}
+        """
+
+########################
+# Rules - main samples
+########################
+
+rule bwa_map_sort:
+    input:
+        r1 = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R1.fq.gz"),
+        r2 = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R2.fq.gz")
+    output:
+        bam  = os.path.join(RESULT_DIR, "{sample}/{sample}.sorted.bam")
+    message:"mapping {wildcards.sample} reads to reference"
+    threads: 4
+    log:
+        os.path.join(RESULT_DIR,"{sample}/{sample}.bwa.log")
+    params:
+        reference = REFERENCE
+    resources: cpus=4
+    wildcard_constraints:
+        sample="(?!NC_)(?!NEG_).*"
+    shell:
+        """
+        bwa mem -t {threads} {params.reference}\
+        {input.r1} {input.r2} 2> {log} | \
+        samtools sort -@ {threads} 2> {log} | \
+        samtools view -@ {threads} -F 4 --write-index -o {output.bam} 2> /dev/null
+        samtools index {output.bam}
+        """
+
+rule ivar_trim:
+    input:
+        bam  = os.path.join(RESULT_DIR, "{sample}/{sample}.sorted.bam")
+    output:
+        sort_trim_bam  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam")
+    message:"mapping {wildcards.sample} reads to reference"
+    threads: 4
+    log:
+        os.path.join(RESULT_DIR,"{sample}/ivar/{sample}.ivar_trim.log")
+    params:
+        trim_bam  = temp(os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.bam")),
+        bedfile = SCHEME,
+        offset = IVAR_OFFSET,
+        prefix = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim")
+    resources: cpus=4
+    wildcard_constraints:
+        sample="(?!NC_)(?!NEG_).*"
+    shell:
+        """
+        ivar trim -i {input.bam} -x {params.offset} -b {params.bedfile} -p {params.prefix} -e 2&> {log}
+        samtools sort -@ {threads} --write-index {params.trim_bam} -o {output.sort_trim_bam} 2> /dev/null
+        samtools index {output.sort_trim_bam}
+        """
+
+rule genomecov:
+    input:
+        bam  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam")
+    output:
+        main_plot  = os.path.join(RESULT_DIR, "{sample}/coverage/{sample}.coverage_plots.pdf"),
+        amp_plot  = os.path.join(RESULT_DIR, "{sample}/coverage/{sample}.check_amplicons.pdf")
+    message:"getting genome coverage statistics for {wildcards.sample}"
+    threads: 1
+    params:
+        coverage  = temp(os.path.join(RESULT_DIR, "{sample}/coverage/{sample}.coverage.txt")),
+        script = COVERAGE_SCRIPT,
+        bedfile = SCHEME,
+        scheme = SCHEME_NAME,
+    resources: cpus=1
+    wildcard_constraints:
+        sample="(?!NC_)(?!NEG_).*"
+    shell:
+        """
+        touch {output.amp_plot}
+        bedtools genomecov -ibam {input.bam} -d > {params.coverage}  2> /dev/null
+        Rscript {params.script} {params.coverage} {params.bedfile} {output.main_plot} {output.amp_plot} {params.scheme}  2> /dev/null
+        """
+
+rule qualimap:
+    input:
+        bam  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam")
+    output:
+        report  = os.path.join(RESULT_DIR, "{sample}/bamqc/genome_results.txt"),
+    message:"getting bamQC metrics for {wildcards.sample}"
+    threads: 1
+    params:
+        outdir = os.path.join(RESULT_DIR, "{sample}/bamqc")
+    resources: cpus=1
+    wildcard_constraints:
+        sample="(?!NC_)(?!NEG_).*"
+    shell:
+        """
+        qualimap bamqc -bam {input.bam} -nt {threads} -outdir {params.outdir} 2&> /dev/null
+        """
+
+rule samtools_mpileup:
+    input:
+        bam  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam")
+    output:
+        mpileup  = temp(os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.mpileup"))
+    message:"generating mpileup for {wildcards.sample}"
+    threads: 4
+    log:
+        os.path.join(RESULT_DIR,"{sample}/ivar/{sample}.mpileup.log")
+    params:
+        reference = REFERENCE
+    wildcard_constraints:
+        sample="(?!NC_)(?!NEG_).*"
+    resources: cpus=4
+    shell:
+        """
+        samtools mpileup -A -d 0 -B -Q 0 --reference {params.reference} {input.bam} -o {output.mpileup} 2>{log}
+        """
+
+rule ivar_variants:
+    input:
+        mpileup  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.mpileup")
+    output:
+        vcf_file  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.vcf")
+    message:"calling variants for {wildcards.sample}"
+    threads: 4
+    log:
+        os.path.join(RESULT_DIR,"{sample}/ivar/{sample}.ivar_variants.log")
+    params:
+        tsv_file  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.tsv"),
+        bedfile = SCHEME,
+        prefix = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar"),
+        reference = REFERENCE,
+        converter = CONVERTER,
+        qual = 20,
+        depth = 10,
+        freq = 0.1
+    wildcard_constraints:
+        sample="(?!NC_)(?!NEG_).*"
+    resources: cpus=4
+    shell:
+        """
+        cat {input.mpileup} | ivar variants -p {params.prefix} -r {params.reference} -q {params.qual} -m {params.depth} -t {params.freq} 2&>{log}
+        python {params.converter} {params.tsv_file} {output.vcf_file} 2> {log}
+        """
+
+rule ivar_consensus:
+    input:
+        mpileup  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.mpileup")
+    output:
+        consensus  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.consensus.fa")
+    message:"calling a consensus for {wildcards.sample}"
+    threads: 1
+    log:
+        os.path.join(RESULT_DIR,"{sample}/ivar/{sample}.ivar_consensus.log")
+    params:
+        prefix = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.consensus"),
+        freq = 0.1
+    wildcard_constraints:
+        sample="(?!NC_)(?!NEG_).*"
+    resources: cpus=1
+    shell:
+        """
+        cat {input.mpileup} | ivar consensus -p {params.prefix} -t {params.freq} -n N 2&> {log}
+        """
+
+rule snpeff:
+    input:
+        vcf_file  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.vcf")
+    output:
+        vcf_file  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.annotated.vcf")
+    message:"annotating variants for {wildcards.sample}"
+    threads: 1
+    log:
+        os.path.join(RESULT_DIR,"{sample}/ivar/{sample}.snpEff.log")
+    params:
+        prefix = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.consensus")
+    wildcard_constraints:
+        sample="(?!NC_)(?!NEG_).*"
+    resources: cpus=1
+    shell:
+        """
+        snpEff eff -csvStats {params.prefix}.stats.csv -s {params.prefix}.stats.html NC_045512.2 {input.vcf_file} > {output.vcf_file} 2> {log}
+        """
+
+rule pangolin:
+    input:
+        fasta  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.consensus.fa")
+    output:
+        report = os.path.join(RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv")
+    shell:
+        """
+        eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --outfile {output.report} {input.fasta} 2> /dev/null
+        """
+
+rule sample_qc:
+    input:
+        bamqc  = os.path.join(RESULT_DIR, "{sample}/bamqc/genome_results.txt"),
+        lineages =  os.path.join(RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv")
+    output:
+        report = temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv"))
+    params:
+        sample = "{sample}"
+    wildcard_constraints:
+        sample="(?!NC_)(?!NEG_).*"
+    run:
+        lineages = pd.read_csv(input.lineages)
+        lineages.loc[0,'taxon'] = params.sample
+        qc = pd.read_csv(input.bamqc, sep="\n")
+        df=pd.DataFrame(columns=['ID','NoReads','NoBases','%Ref','Mean Cov','std','pangolin lineage', 'scorpio_call','QC'])
+
+        ref=qc[qc['BamQC report'].str.contains('coverageData >= 10X')].iloc[0,0].split()[3]
+        No_reads=int(qc[qc['BamQC report'].str.contains('number of reads')].iloc[0].tolist()[0].split()[-1].replace(',',''))
+        No_bases=int(qc[qc['BamQC report'].str.contains('number of mapped bases')].iloc[0].tolist()[0].split()[-2].replace(',',''))
+        mean_cov=int(float(qc.tail(n=1).iloc[0][0].split()[3]))
+        std=int(float(qc.tail(n=1).iloc[0][0].split()[4]))
+        lineage = lineages.loc[0,'lineage']
+        scorpio_call = lineages.loc[0,'scorpio_call']
+        if int(float(ref.split('%')[0]))>79:
+            df.loc[0]=[params.sample,No_reads,No_bases,ref,mean_cov,std,lineage,scorpio_call,'PASS']
+        else:
+            df.loc[0]=[params.sample,No_reads,No_bases,ref,mean_cov,std,lineage,scorpio_call,'FAIL']
+        df.to_csv(output.report, header=True,index=False)
+
+
+########################
+# Rules - negative controls
+########################
+
+rule kraken2:
+    input:
+        forward_reads = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R1.fq.gz"),
+        reverse_reads = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R2.fq.gz")
+    output:
+        result = os.path.join(RESULT_DIR, "{sample}/kraken2/{sample}.kraken_result.txt"),
+        report = os.path.join(RESULT_DIR, "{sample}/kraken2/{sample}.kraken_report.txt")
+    log:
+        os.path.join(RESULT_DIR, "{sample}/kraken2/{sample}.kraken2.log")
+    params:
+        KRAKEN2_DB = "/data/kraken_files/k2_viral"
+    wildcard_constraints:
+        sample = "(NC_|NEG_).*"
+    threads: 4
+    resources:
+        mem_mb=55000,
+        cpus=4
+    shell:
+        """
+        kraken2 --threads 4 \
+        --gzip-compressed \
+        '{input.forward_reads}' '{input.reverse_reads}' \
+        --output '{output.result}' \
+        --report '{output.report}' \
+        --db '{params.KRAKEN2_DB}' \
+        2>{log}
+        """
+
+rule neg_qc:
+    input:
+        kraken = os.path.join(RESULT_DIR, "{sample}/kraken2/{sample}.kraken_result.txt")
+    output:
+        report = temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv"))
+    params:
+        today = TODAY,
+        sample = "{sample}"
+    wildcard_constraints:
+        sample = "(NC_|NEG_).*"
+    run:
+        df=pd.DataFrame(columns=['ID','NoReads','NoBases','%Ref','Mean Cov','std','pangolin lineage', 'scorpio_call','QC'])
+        try:
+            neg=pd.read_csv(input.kraken, sep='\t', header=None)
+            if sum(neg[3]) > 10000:
+                df.loc[0]=[params.sample,neg.shape[0],sum(neg[3]),'-','-','-','-','-','FAIL']
+            else:
+                df.loc[0]=[params.sample,neg.shape[0],sum(neg[3]),'-','-','-','-','-','PASS']
+        except:
+            df.loc[llen]=[params.sample,'No_reads',0,'-','-','-','-','-','PASS']
+        df.to_csv(output.report, header=True,index=False)
