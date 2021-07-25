@@ -314,7 +314,7 @@ rule pangolin:
         report = os.path.join(RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv")
     shell:
         """
-        eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --outfile {output.report} {input.fasta} 2> /dev/null
+        eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --outfile {output.report} {input.fasta} &> /dev/null
         """
 
 rule sample_qc:
