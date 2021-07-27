@@ -27,9 +27,7 @@ REFERENCE=config["reference"]
 SCHEME=config["scheme"]
 COVERAGE_SCRIPT=config["coverage_script"]
 CONVERTER = config["converter_script"]
-VCF_MOD = config["vcf_script"]
 ISOLATES = config['isolates']
-VARIANT_PROGRAM = os.path.basename(config['variant_program'])
 SCHEME_NAME = os.path.basename(SCHEME)
 
 SUFFIX = config['suffix']
@@ -62,7 +60,7 @@ TODAY=date.today().strftime("%Y-%m-%d")
 
 rule final_qc:
     input:
-        snpEff_file  = expand(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.annotated.vcf"), sample = MAIN_SAMPLES),
+        snpEff_file  = expand(os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.annotated.vcf"), sample = MAIN_SAMPLES),
         coverage_plot = expand(os.path.join(RESULT_DIR, "{sample}/coverage/{sample}.coverage_plots.pdf"), sample = MAIN_SAMPLES),
         neg_reports = expand(os.path.join(RESULT_DIR, "{sample}.qc_results.csv"), sample = NEG_SAMPLES),
         sample_reports = expand(os.path.join(RESULT_DIR, "{sample}.qc_results.csv"), sample = MAIN_SAMPLES)
@@ -228,7 +226,7 @@ rule samtools_mpileup:
     input:
         bam  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam")
     output:
-        mpileup  = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.mpileup"))
+        mpileup  = temp(os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.mpileup"))
     message:"generating mpileup for {wildcards.sample}"
     threads: 4
     log:
@@ -245,19 +243,17 @@ rule samtools_mpileup:
 
 rule ivar_variants:
     input:
-        mpileup  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.mpileup")
+        mpileup  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.mpileup")
     output:
-        vcf_file  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz"),
-        temp_vcf_file = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf")),
-        temp_vcf_file2 = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf.gz"))
+        vcf_file  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.vcf")
     message:"calling variants for {wildcards.sample}"
     threads: 4
     log:
-        os.path.join(RESULT_DIR,"{sample}/variants/{sample}.ivar_variants.log")
+        os.path.join(RESULT_DIR,"{sample}/ivar/{sample}.ivar_variants.log")
     params:
-        tsv_file  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.tsv"),
+        tsv_file  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.tsv"),
         bedfile = SCHEME,
-        prefix = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar"),
+        prefix = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar"),
         reference = REFERENCE,
         converter = CONVERTER,
         qual = 20,
@@ -269,108 +265,52 @@ rule ivar_variants:
     shell:
         """
         cat {input.mpileup} | ivar variants -p {params.prefix} -r {params.reference} -q {params.qual} -m {params.depth} -t {params.freq} 2&>{log}
-        python {params.converter} {params.tsv_file} {output.temp_vcf_file} 2> {log}
-        bgzip -c {output.temp_vcf_file} > {output.temp_vcf_file2}
-        bcftools index {output.temp_vcf_file2}
-        bcftools norm -Ou -a -m - {output.temp_vcf_file2} 2> {log} | \
-        bcftools view -i "FORMAT/ALT_FREQ >= 0.10 & FORMAT/ALT_QUAL >= 20 & INFO/DP >= 10" -Oz -o {output.vcf_file} {output.temp_vcf_file2}
-        bcftools index {output.vcf_file}
-        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < 0.9 & INFO/DP >= 10' -n 'c:0/1' 2> {log}| \
-        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= 0.9 & INFO/DP >= 10' -n 'c:1/1' 2> {log}
-        bcftools index -f {output.vcf_file}
+        python {params.converter} {params.tsv_file} {output.vcf_file} 2> {log}
         """
 
-rule lofreq_variants:
+rule ivar_consensus:
     input:
-        bam = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam")
+        mpileup  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.mpileup")
     output:
-        vcf_file  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz"),
-        new_bam = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam")),
-        tmp_vcf1 = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")),
-        tmp_vcf2 = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz"))
-    message:"calling variants for {wildcards.sample}"
-    threads: 4
-    log:
-        os.path.join(RESULT_DIR,"{sample}/variants/{sample}.lofreq.log")
-    params:
-        vcf_script = VCF_MOD,
-        prefix = "{sample}",
-        reference = REFERENCE,
-        depth = 10,
-        snv_freq = 0.1,
-        con_freq = 0.9
-    wildcard_constraints:
-        sample="(?!NC_)(?!NEG_).*"
-    resources: cpus=4
-    shell:
-        """
-        lofreq indelqual --dindel {input.bam} -f {params.reference} | \
-        samtools sort > {output.new_bam}
-        samtools index {output.new_bam}
-        lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
-        -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
-        bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
-        bcftools norm -Ou -a -m - {output.tmp_vcf2} 2> /dev/null | \
-        bcftools view -i "INFO/AF >= {params.snv_freq}" -Oz -o {output.vcf_file}
-        bcftools index {output.vcf_file}
-        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2> {log} | \
-        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF >= {params.con_freq}' -n 'c:1/1' 2> {log}
-        bcftools index -f {output.vcf_file}
-        """
-
-if VARIANT_PROGRAM == 'ivar':
-    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz")
-elif VARIANT_PROGRAM == 'lofreq':
-    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz")
-
-rule generate_consensus:
-    input:
-        vcf_file  = proper_vcf,
-        bam = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam")
-    output:
-        consensus  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.fa"),
-        mask = temp(os.path.join(RESULT_DIR, "{sample}/variants/mask.bed")),
-        variants_bed = temp(os.path.join(RESULT_DIR, "{sample}/variants/variants.bed"))
+        consensus  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.consensus.fa")
     message:"calling a consensus for {wildcards.sample}"
     threads: 1
     log:
-        os.path.join(RESULT_DIR,"{sample}/variants/{sample}.consensus.log")
+        os.path.join(RESULT_DIR,"{sample}/ivar/{sample}.ivar_consensus.log")
     params:
-        prefix = "{sample}",
-        reference = REFERENCE,
-        freq = 0.9
+        prefix = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.consensus"),
+        freq = 0.1
     wildcard_constraints:
         sample="(?!NC_)(?!NEG_).*"
     resources: cpus=1
     shell:
         """
-        bcftools query -f'%CHROM\t%POS0\t%END\n' {input.vcf_file} > {output.variants_bed}
-        bedtools genomecov -bga -ibam {input.bam} | awk '$4 < 10' | \
-        bedtools subtract -a - -b {output.variants_bed} > {output.mask}
-        bcftools consensus -p {params.prefix} -f {params.reference} --mark-del '-' -m {output.mask} -H I -i 'INFO/DP >= 10' {input.vcf_file} 2> {log} | \
-        sed "/^>/s/{params.prefix}.*/{params.prefix}/" > {output.consensus}
+        cat {input.mpileup} | ivar consensus -p {params.prefix} -t {params.freq} -n N 2&> {log}
+        sed -i '/^>/s/^>Consensus_/>/g' {output.consensus} 
         """
 
 rule snpeff:
     input:
-        vcf_file  = proper_vcf
+        vcf_file  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.vcf")
     output:
-        vcf_file  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.annotated.vcf")
+        vcf_file  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar.annotated.vcf")
     message:"annotating variants for {wildcards.sample}"
     threads: 1
+    log:
+        os.path.join(RESULT_DIR,"{sample}/ivar/{sample}.snpEff.log")
     params:
-        prefix = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.snpeff")
+        prefix = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.snpeff")
     wildcard_constraints:
         sample="(?!NC_)(?!NEG_).*"
     resources: cpus=1
     shell:
         """
-        snpEff eff -csvStats {params.prefix}.stats.csv -s {params.prefix}.stats.html NC_045512.2 {input.vcf_file} > {output.vcf_file}
+        snpEff eff -csvStats {params.prefix}.stats.csv -s {params.prefix}.stats.html NC_045512.2 {input.vcf_file} > {output.vcf_file} 2> {log}
         """
 
 rule pangolin:
     input:
-        fasta  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.fa")
+        fasta  = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.consensus.fa")
     output:
         report = os.path.join(RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv")
     shell:

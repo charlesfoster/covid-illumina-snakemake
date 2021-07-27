@@ -39,7 +39,7 @@ def main(sysargs = sys.argv[1:]):
            /^\/^\\  COVID
          _|__|  O|  Illumina
 \/     /~     \_/ \\    Pipeline
- \____|__________/  \\      Snakemake edition v0.1.0
+ \____|__________/  \\      Snakemake edition v0.2.0
         \_______      \\
                 `\     \                 \\
                   |     |                  \\
@@ -75,7 +75,8 @@ def main(sysargs = sys.argv[1:]):
     parser.add_argument('-r','--reference', action="store",required=False,default=os.path.join(thisdir,'bin','NC_045512.fasta'),help="Reference genome to use (Default: {})".format(os.path.join(thisdir,'bin','NC_045512.fasta')))
     parser.add_argument('-s','--scheme', action="store",required=False,default='midnight',help="Primer scheme to use: built-in opts are 'midnight', 'swift', 'eden', but if using your own scheme provide the full path to the bed file here  (Default: {})".format('midnight'))
     parser.add_argument('-t','--threads',action="store",help="Number of threads to use", default = psutil.cpu_count(logical=True), metavar='<int>')
-    parser.add_argument("-v","--version", action='version', version=f"covid illumina pipeline snakemake edition:  {__version__}")
+    parser.add_argument('-v','--variant_caller',action="store",help="Variant caller to use. Choices: 'lofreq' or 'ivar' Default: 'lofreq'", default = 'lofreq')
+    parser.add_argument("--version", action='version', version=f"covid illumina pipeline snakemake edition:  {__version__}")
     parser.add_argument('--suffix',action="store",help="Suffix used to identify samples from reads. Default: {}".format("_L001_R1_001.fastq.gz"), metavar="<str>")
     parser.add_argument('--max_memory',action="store",help="Maximum memory (in MB) that you would like to provide to snakemake. Default: {}MB".format(max_mem), metavar="<int>")
     parser.add_argument('--verbose',action="store_true",help="Print junk to screen.")
@@ -121,6 +122,7 @@ def main(sysargs = sys.argv[1:]):
         scheme = args.scheme
     coverage_script = os.path.join(thisdir,'bin','plot_coverage.R')
     converter_script = os.path.join(thisdir,'bin','ivar_variants_to_vcf.py')
+    vcf_script = os.path.join(thisdir,'bin','add_fake_genotype.sh')
 
     suffix = "_L001_R1_001.fastq.gz"
     if args.suffix:
@@ -140,6 +142,24 @@ def main(sysargs = sys.argv[1:]):
     else:
         isolates = False
 
+    if args.variant_caller:
+        if args.variant_caller not in ['lofreq','ivar']:
+            print('#####\n\033[91mError\033[0m: Variant caller must be either "lofreq" or "ivar"\n#####\n')
+            sys.exit(1)
+        variant_caller = args.variant_caller
+    else:
+        variant_caller = 'lofreq'
+    variant_caller = shutil.which(variant_caller)
+
+    # ivar is still necessary for trimming
+    if shutil.which('ivar') is None:
+        print('#####\n\033[91mError\033[0m: "ivar" is necessary for amplicon trimming but is not in your path\n#####\n')
+        sys.exit(1)
+
+    if variant_caller is None:
+        print('#####\n\033[91mError\033[0m: {} could not be found in your path\n#####\n'.format(variant_caller))
+        sys.exit(1)
+
     if not os.path.isfile(args.reference+'.fai'):
         os.system("samtools faidx {} 2> /dev/null".format(args.reference))
     if not os.path.isfile(args.reference+'.bwt'):
@@ -155,6 +175,8 @@ def main(sysargs = sys.argv[1:]):
         "isolates":isolates,
         "coverage_script":coverage_script,
         "converter_script":converter_script,
+        "vcf_script":vcf_script,
+        "variant_program":variant_caller,
         "scheme":scheme,
         "isolates":isolates,
         "suffix":suffix,

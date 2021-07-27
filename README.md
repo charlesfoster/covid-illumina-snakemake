@@ -33,27 +33,40 @@ git clone https://github.com/charlesfoster/covid-illumina-snakemake.git
 cd covid-illumina-snakemake
 ```
 
-Next, install dependencies using `conda`:
+Next, install *most* dependencies using `conda`:
 
 ```
 conda env create -f environment.yml
 ```
 
-Pro tip: if you install `mamba`, yo ucan create the environment with that command instead of `conda`. A lot of `conda` headaches go away: it's a much faster drop-in replacement for `conda`.
+Pro tip: if you install `mamba`, you can create the environment with that command instead of `conda`. A lot of `conda` headaches go away: it's a much faster drop-in replacement for `conda`.
 
 ```
 conda install mamba
 mamba env create -f environment.yml
 ```
 
-Finally, install the pipeline correctly with:
+Install the pipeline correctly with:
 
 ```
 pip install .
 ```
 
-Other requirements:
+Other dependencies:
 * Lineages are typed using `pangolin`. Accordingly, `pangolin` needs to be installed according to instructions at https://github.com/cov-lineages/pangolin.
+* Variants are called using either `lofreq` (preferred) or `ivar`. Ideally we could install these via `mamba`, but the hosted versions do not yet support htslib>=1.13 (needed for our specific `bcftools commands`). Install each program according to the documentation of each program:
+  - `lofreq`: https://csb5.github.io/lofreq/installation/
+  - `ivar`: https://github.com/andersen-lab/ivar#insallation (not my typo). Note: the official instructions for compiling from source are a pain. I recommend installing `ivar` `conda`/`mamba` (easiest), *but for now you will need to install it into a different environment than CIS, and add that environment's `bin/` to your path*.
+
+Example command for installing `ivar`:
+
+```
+conda create -n ivar_env ivar=1.3.1
+echo 'export PATH=$PATH:/home/cfos/miniconda3/envs/ivar_env/bin' >> ~/.bashrc
+source ~/.bashrc
+```
+
+`ivar` should now be detected on your path successfully. If you already have `ivar` installed elsewhere, add that location to your `$PATH` instead. This installation will be less of a pain when `ivar` with htslib==1.13 dependency is on a conda repository.
 
 # Usage
 The environment with all necessary tools is installed as '`CIS`' for brevity. The environment should first be activated:
