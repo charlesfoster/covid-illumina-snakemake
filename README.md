@@ -56,7 +56,7 @@ Other dependencies:
 * Lineages are typed using `pangolin`. Accordingly, `pangolin` needs to be installed according to instructions at https://github.com/cov-lineages/pangolin.
 * Variants are called using either `lofreq` (preferred) or `ivar`. Ideally we could install these via `mamba`, but the hosted versions do not yet support htslib>=1.13 (needed for our specific `bcftools commands`). Install each program according to the documentation of each program:
   - `lofreq`: https://csb5.github.io/lofreq/installation/
-  - `ivar`: https://github.com/andersen-lab/ivar#insallation (not my typo). Note: the official instructions for compiling from source are a pain. I recommend installing `ivar` `conda`/`mamba` (easiest), *but for now you will need to install it into a different environment than CIS, and add that environment's `bin/` to your path*.
+  - `ivar`: https://github.com/andersen-lab/ivar#insallation (not my typo). Note: the official instructions for compiling from source are a pain. I recommend installing `ivar` via `conda`/`mamba` (easiest), *but for now you will need to install it into a different environment than CIS, and add that environment's `bin/` to your path*.
 
 Example command for installing `ivar`:
 
@@ -98,6 +98,25 @@ By default, the program assumes that you have used the 'Midnight' amplicon proto
 All other options are as follows, and can be accessed with `CIS --help`:
 
 ```
+[92m
+           /^\/^\  COVID
+         _|__|  O|  Illumina
+\/     /~     \_/ \    Pipeline
+ \____|__________/  \      Snakemake edition v0.2.0
+        \_______      \
+                `\     \                 \
+                  |     |                  \
+                 /      /                    \
+                /     /                       \\
+              /      /                         \ \
+             /     /                            \  \
+           /     /             _----_            \   \
+          /     /           _-~      ~-_         |   |
+         (      (        _-~    _--_    ~-_     _/   |
+          \      ~-____-~    _-~    ~-_    ~-_-~    /
+            ~-_           _-~          ~-_       _-~
+               ~--______-~                ~-___-~    [0m
+
 usage: CIS [options] <query_directory>
 
 covid-illumina-snakemake: a pipeline for analysis SARS-CoV-2 samples
@@ -108,25 +127,36 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -i ISOLATES, --isolates ISOLATES
-                        List of isolates to assemble (Default: all isolates in query_directory)
-  -f, --force           Force overwriting of completed files (Default: files not overwritten)
+                        List of isolates to assemble (Default: all isolates in
+                        query_directory)
+  -f, --force           Force overwriting of completed files (Default: files
+                        not overwritten)
   -k KRAKEN2_DB, --kraken2_db KRAKEN2_DB
-                        kraken2 database. Default: /data/kraken_files/k2_standard_20201202
+                        kraken2 database. Default:
+                        /data/kraken_files/k2_standard_20201202
   -n, --dry_run         Dry run only
   -o OUTDIR, --outdir OUTDIR
-                        Output directory. Default: /home/cfos/Programs/COVID_Illumina_Snakemake/results/2021-07-23
+                        Output directory. Default: /home/cfos/Programs/COVID_I
+                        llumina_Snakemake/results/2021-07-27
   -p, --print_dag       Save directed acyclic graph (DAG) of workflow
   -r REFERENCE, --reference REFERENCE
-                        Reference genome to use (Default: /home/cfos/miniconda3/envs/CIS/lib/python3.9/site-
+                        Reference genome to use (Default:
+                        /home/cfos/miniconda3/envs/CIS/lib/python3.9/site-
                         packages/CIS/bin/NC_045512.fasta)
   -s SCHEME, --scheme SCHEME
-                        Primer scheme to use: built-in opts are 'midnight', 'swift', 'eden', but if using your own scheme provide
+                        Primer scheme to use: built-in opts are 'midnight',
+                        'swift', 'eden', but if using your own scheme provide
                         the full path to the bed file here (Default: midnight)
   -t <int>, --threads <int>
                         Number of threads to use
-  -v, --version         show program's version number and exit
-  --suffix <str>        Suffix used to identify samples from reads. Default: _L001_R1_001.fastq.gz
-  --max_memory <int>    Maximum memory (in MB) that you would like to provide to snakemake. Default: 55003MB
+  -v VARIANT_CALLER, --variant_caller VARIANT_CALLER
+                        Variant caller to use. Choices: 'lofreq' or 'ivar'
+                        Default: 'lofreq'
+  --version             show program's version number and exit
+  --suffix <str>        Suffix used to identify samples from reads. Default:
+                        _L001_R1_001.fastq.gz
+  --max_memory <int>    Maximum memory (in MB) that you would like to provide
+                        to snakemake. Default: 51580MB
   --verbose             Print junk to screen.
 ```
 
@@ -160,19 +190,19 @@ Reads are mapped to the SARS-CoV-2 reference genome with `bwa mem`.
 The `ivar` suite of tools is used to remove primers from the mapped reads, and carry out quality trimming. Since quality trimming is already carried out by `fastp`, this is a second "line of defence" and might be superflous. After testing, the quality trimming option in `ivar` might be disabled.
 
 # Assess coverage
-The coverage for each base in the SAS-CoV-2 genome is calculated with `bedtools`, and then plotted in R. The coverage for each amplicon within the bed file specifying primer coordinates is also plotted (but not for the Swift protocol since it has too many amplicons).
+The coverage for each base in the SARS-CoV-2 genome is calculated with `bedtools`, and then plotted in R. The coverage for each amplicon within the bed file specifying primer coordinates is also plotted (but not for the Swift protocol since it has too many amplicons).
 
 # Variant calling
-Variants are called using `ivar`.
+Variants are called using `lofreq` (default) or `ivar`. Thresholds are currently hard-coded, but might become command line options later.
 
 # SNP annotation
 SNPs are annotated using `snpEff`, giving information including the Ts:Tv ratio, and any functional consequences of the SNPs.
 
 # Generate consensus genome
-A consensus genome is generated for each sample using `samtools mpileup` +  `ivar`
+A consensus genome is generated for each sample using `bcftools consensus`. I have implemented the program in a way to conditionally implement IUPAC codes based on a variant allele frequency of 0.90.
 
 # Pangolin lineage assignment
-Newly generated consensus genomes from `ivar` are assigned to Pangolin lineages using `pangolin`.
+Newly generated consensus genomes are assigned to Pangolin lineages using `pangolin`.
 
 # Summary statistics
 A `.csv` file with quality control summary statistics is printed to the results directory.
