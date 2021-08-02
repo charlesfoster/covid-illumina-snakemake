@@ -31,6 +31,7 @@ VCF_MOD = config["vcf_script"]
 ISOLATES = config['isolates']
 VARIANT_PROGRAM = os.path.basename(config['variant_program'])
 SCHEME_NAME = os.path.basename(SCHEME)
+KRAKEN2_DB = config["kraken2_db"]
 
 SUFFIX = config['suffix']
 SUFFIX = SUFFIX.replace('R2','R1')
@@ -425,7 +426,7 @@ rule kraken2:
     log:
         os.path.join(RESULT_DIR, "{sample}/kraken2/{sample}.kraken2.log")
     params:
-        KRAKEN2_DB = "/data/kraken_files/k2_viral"
+        KRAKEN2_DB = KRAKEN2_DB
     wildcard_constraints:
         sample = "(NC_|NEG_).*"
     threads: 4
