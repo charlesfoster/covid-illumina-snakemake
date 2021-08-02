@@ -32,6 +32,7 @@ ISOLATES = config['isolates']
 VARIANT_PROGRAM = os.path.basename(config['variant_program'])
 SCHEME_NAME = os.path.basename(SCHEME)
 KRAKEN2_DB = config["kraken2_db"]
+CON_FREQ = config["consensus_freq"]
 
 SUFFIX = config['suffix']
 SUFFIX = SUFFIX.replace('R2','R1')
@@ -267,21 +268,23 @@ rule ivar_variants:
         converter = CONVERTER,
         qual = 20,
         depth = 10,
-        freq = 0.1
+        con_freq = CON_FREQ,
+        snv_freq = 0.1
     wildcard_constraints:
         sample="(?!NC_)(?!NEG_).*"
     resources: cpus=4
     shell:
         """
-        cat {input.mpileup} | ivar variants -p {params.prefix} -r {params.reference} -q {params.qual} -m {params.depth} -t {params.freq} 2&>{log}
+        cat {input.mpileup} | ivar variants -p {params.prefix} -r {params.reference} -q {params.qual} -m {params.depth} -t {params.snv_freq} 2&>{log}
         python {params.converter} {params.tsv_file} {output.temp_vcf_file} 2> {log}
         bgzip -c {output.temp_vcf_file} > {output.temp_vcf_file2}
         bcftools index {output.temp_vcf_file2}
         bcftools norm -Ou -a -m - {output.temp_vcf_file2} 2> {log} | \
-        bcftools view -i "FORMAT/ALT_FREQ >= 0.10 & FORMAT/ALT_QUAL >= 20 & INFO/DP >= 10" -Oz -o {output.vcf_file} {output.temp_vcf_file2}
+        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= 10" -Oz -o {output.vcf_file} {output.temp_vcf_file2}
         bcftools index {output.vcf_file}
-        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < 0.9 & INFO/DP >= 10' -n 'c:0/1' 2> {log}| \
-        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= 0.9 & INFO/DP >= 10' -n 'c:1/1' 2> {log}
+        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= 10' -n 'c:0/1' 2> {log}| \
+        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.con_freq}' -n . 2>> {log} | \
+        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= {params.con_freq} & INFO/DP >= 10' -n 'c:1/1' 2> {log}
         bcftools index -f {output.vcf_file}
         """
 
@@ -306,7 +309,7 @@ rule lofreq_variants:
         reference = REFERENCE,
         depth = 10,
         snv_freq = 0.1,
-        con_freq = 0.9
+        con_freq = CON_FREQ
     wildcard_constraints:
         sample="(?!NC_)(?!NEG_).*"
     resources: cpus=8
@@ -318,11 +321,13 @@ rule lofreq_variants:
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
         bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
-        bcftools norm -Ou -a -m - {output.tmp_vcf2} 2> /dev/null | \
+        bcftools +fill-tags {output.tmp_vcf2} -Ou -- -t "TYPE" | \
+        bcftools norm -Ou -a -m -  2> /dev/null | \
         bcftools view -f 'PASS,.' -i "INFO/AF >= {params.snv_freq}" -Oz -o {output.vcf_file}
         bcftools index {output.vcf_file}
-        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2> {log} | \
-        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF >= {params.con_freq}' -n 'c:1/1' 2> {log}
+        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
+        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.con_freq}' -n . 2>> {log} | \
+        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF >= {params.con_freq}' -n 'c:1/1' 2>> {log}
         bcftools index -f {output.vcf_file}
         """
 
@@ -346,7 +351,7 @@ rule generate_consensus:
     params:
         prefix = "{sample}",
         reference = REFERENCE,
-        freq = 0.9
+        freq = CON_FREQ
     wildcard_constraints:
         sample="(?!NC_)(?!NEG_).*"
     resources: cpus=1
@@ -355,7 +360,7 @@ rule generate_consensus:
         bcftools query -f'%CHROM\t%POS0\t%END\n' {input.vcf_file} > {output.variants_bed}
         bedtools genomecov -bga -ibam {input.bam} | awk '$4 < 10' | \
         bedtools subtract -a - -b {output.variants_bed} > {output.mask}
-        bcftools consensus -p {params.prefix} -f {params.reference} --mark-del '-' -m {output.mask} -H I -i 'INFO/DP >= 10' {input.vcf_file} 2> {log} | \
+        bcftools consensus -p {params.prefix} -f {params.reference} --mark-del '-' -m {output.mask} -H I -i 'INFO/DP >= 10 & GT!="mis"' {input.vcf_file} 2> {log} | \
         sed "/^>/s/{params.prefix}.*/{params.prefix}/" > {output.consensus}
         """
 

@@ -39,7 +39,7 @@ def main(sysargs = sys.argv[1:]):
            /^\/^\\  COVID
          _|__|  O|  Illumina
 \/     /~     \_/ \\    Pipeline
- \____|__________/  \\      Snakemake edition v0.2.1
+ \____|__________/  \\      Snakemake edition v0.3.0
         \_______      \\
                 `\     \                 \\
                   |     |                  \\
@@ -66,6 +66,7 @@ def main(sysargs = sys.argv[1:]):
     usage='''CIS [options] <query_directory> ''')
 
     parser.add_argument('query_directory', nargs="*", help='Path to directory with reads to process.')
+    parser.add_argument('-c','--consensus_freq', action="store",required=False,help="Variant allele frequency threshold for a variant to be incorporated into consensus genome. Default: {}".format(float(0.90)), metavar='<int>')
     parser.add_argument('-i','--isolates', action="store",required=False,help="List of isolates to assemble (Default: all isolates in query_directory)")
     parser.add_argument('-f','--force', action="store_true",default=False,required=False,help="Force overwriting of completed files (Default: files not overwritten)")
     parser.add_argument('-k','--kraken2_db', action="store",help="kraken2 database. Default: {}".format(default_kraken))
@@ -159,7 +160,14 @@ def main(sysargs = sys.argv[1:]):
     if variant_caller is None:
         print('#####\n\033[91mError\033[0m: {} could not be found in your path\n#####\n'.format(variant_caller))
         sys.exit(1)
-
+    
+    consensus_freq = 0.9
+    if args.consensus_freq:
+        consensus_freq = float(args.consensus_freq)
+        if consensus_freq > 1 or consensus_freq < 0:
+            print('#####\n\033[91mError\033[0m: The consensus_freq option must be a float number between 0 and 1\n#####\n')
+            sys.exit(1)  
+    
     if not os.path.isfile(args.reference+'.fai'):
         os.system("samtools faidx {} 2> /dev/null".format(args.reference))
     if not os.path.isfile(args.reference+'.bwt'):
@@ -181,6 +189,7 @@ def main(sysargs = sys.argv[1:]):
         "isolates":isolates,
         "suffix":suffix,
         "threads":args.threads,
+        "consensus_freq":consensus_freq,
         "verbose":args.verbose
         }
 
