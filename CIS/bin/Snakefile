@@ -90,7 +90,7 @@ rule fastp:
         html = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_fastp.html"),
         json = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_fastp.json")
     message:"trimming {wildcards.sample} reads"
-    threads: 8
+    threads: 4
     log:
         os.path.join(RESULT_DIR,"{sample}/fastp/{sample}.log.txt")
     params:
@@ -286,10 +286,13 @@ rule lofreq_variants:
     output:
         vcf_file  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz"),
         new_bam = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam")),
+        new_bam_index = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam.bai")),
         tmp_vcf1 = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")),
-        tmp_vcf2 = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz"))
+        tmp_vcf2 = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz")),
+        tmp_vcf1_index = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz.tbi")),
+        tmp_vcf2_index = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz.tbi"))
     message:"calling variants for {wildcards.sample}"
-    threads: 4
+    threads: 8
     log:
         os.path.join(RESULT_DIR,"{sample}/variants/{sample}.lofreq.log")
     params:
@@ -301,11 +304,11 @@ rule lofreq_variants:
         con_freq = 0.9
     wildcard_constraints:
         sample="(?!NC_)(?!NEG_).*"
-    resources: cpus=4
+    resources: cpus=8
     shell:
         """
         lofreq indelqual --dindel {input.bam} -f {params.reference} | \
-        samtools sort > {output.new_bam}
+        samtools sort -@ {threads} -o {output.new_bam} 2> /dev/null
         samtools index {output.new_bam}
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
