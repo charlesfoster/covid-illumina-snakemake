@@ -39,7 +39,7 @@ def main(sysargs = sys.argv[1:]):
            /^\/^\\  COVID
          _|__|  O|  Illumina
 \/     /~     \_/ \\    Pipeline
- \____|__________/  \\      Snakemake edition v0.2.0
+ \____|__________/  \\      Snakemake edition v0.2.1
         \_______      \\
                 `\     \                 \\
                   |     |                  \\

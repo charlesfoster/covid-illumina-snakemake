@@ -42,10 +42,14 @@ REGEX_NEG = str("{sample, (NEG_|NC_).*}")+SUFFIX
 
 SAMPLES = glob_wildcards(os.path.join(READSDIR,REGEX)).sample
 MAIN_SAMPLES = glob_wildcards(os.path.join(READSDIR,REGEX_MAIN)).sample
+NEG_SAMPLES = glob_wildcards(os.path.join(READSDIR,REGEX_NEG)).sample
+
 if ISOLATES != False:
     MAIN_SAMPLES = [i for i in MAIN_SAMPLES if any(b in i for b in ISOLATES)]
+    NEG_SAMPLES = [i for i in NEG_SAMPLES if any(b in i for b in ISOLATES)]
 
-NEG_SAMPLES = glob_wildcards(os.path.join(READSDIR,REGEX_NEG)).sample
+config['analysis_samples'] = '; '.join(MAIN_SAMPLES)
+config['neg_samples'] = '; '.join(NEG_SAMPLES)
 
 if SCHEME_NAME == 'swift.bed':
     IVAR_OFFSET = 5
@@ -315,7 +319,7 @@ rule lofreq_variants:
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
         bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
         bcftools norm -Ou -a -m - {output.tmp_vcf2} 2> /dev/null | \
-        bcftools view -i "INFO/AF >= {params.snv_freq}" -Oz -o {output.vcf_file}
+        bcftools view -f 'PASS,.' -i "INFO/AF >= {params.snv_freq}" -Oz -o {output.vcf_file}
         bcftools index {output.vcf_file}
         bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2> {log} | \
         bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF >= {params.con_freq}' -n 'c:1/1' 2> {log}
