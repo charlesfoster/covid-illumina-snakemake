@@ -13,51 +13,9 @@ import os
 import re
 from datetime import date
 import pandas as pd
+import glob
 import yaml
 import subprocess
-import glob
-import pandas as pd
-
-#################
-# Custom functions
-#################
-
-def find_input_data(READSDIR, data_type, SUFFIX):
-    reads = glob.glob(os.path.join(READSDIR,'*'+SUFFIX))
-    main_exclusion = ['Undet','NEG_', 'NC_']
-    neg_inclusion = ['NEG_', 'NC_']
-    if data_type == "main":
-        reads = [i for i in reads if not any(b in i for b in main_exclusion)]
-    elif data_type == "neg":
-        reads = [i for i in reads if any(b in i for b in neg_inclusion)]
-    result = []
-    for read in reads:
-        if SUFFIX == '_L001_R1_001.fastq.gz':
-            sample = re.sub("_S\d+_L001.*", repl = "", string=os.path.basename(read))
-            barcode = re.search("S\d+_L001.*", string=os.path.basename(read)).group()
-            barcode = re.sub("_.*",repl="",string=barcode)
-            res = {'sample':sample,'barcode':barcode, 'fq1':read,'fq2':read.replace("_R1","_R2")}
-        else:
-            sample = re.sub(SUFFIX, repl = "", string=os.path.basename(read))
-            barcode = "N/A"
-            res = {'sample':sample,'barcode':barcode, 'fq1':read,'fq2':read.replace("_R1","_R2")}    
-        result.append(res)
-    result =  pd.DataFrame(result, dtype=str).set_index(["sample"], drop=False)
-    return result
-
-
-def get_trim_names(wildcards):
-    """
-    This function:
-      1. Returns the correct input and output trimmed file names for fastp.
-    """
-    inFile = INPUT_TABLE.loc[(wildcards.sample), ["fq1", "fq2"]].dropna()
-    return "--in1 " + inFile[0] + " --in2 " + inFile[1] + " --out1 " + os.path.join(RESULT_DIR, wildcards.sample, "fastp", wildcards.sample + "_trimmed_R1.fq.gz") + " --out2 " + os.path.join(RESULT_DIR, wildcards.sample, "fastp", wildcards.sample + "_trimmed_R2.fq.gz")
-
-def get_fastq(wildcards):
-    """This function returns the forward and reverse fastq files for samples"""
-    return INPUT_TABLE.loc[(wildcards.sample), ["fq1", "fq2"]].dropna()
-
 
 ###############
 # Configuration
@@ -78,16 +36,14 @@ CON_FREQ = config["consensus_freq"]
 
 SUFFIX = config['suffix']
 SUFFIX = SUFFIX.replace('R2','R1')
+SUFFIX_R2 = SUFFIX.replace('R1','R2')
+REGEX = str("{sample, (?!Undet).*}")+SUFFIX
+REGEX_MAIN = str("{sample, (?!Undet)(?!NC_).*}")+SUFFIX
+REGEX_NEG = str("{sample, (NEG_|NC_).*}")+SUFFIX
 
-MAIN_TABLE = find_input_data(READSDIR, "main", SUFFIX)
-MAIN_SAMPLES = MAIN_TABLE.index.get_level_values('sample').unique().tolist()
-try:
-    NEG_TABLE = find_input_data(READSDIR, "neg", SUFFIX)
-    NEG_SAMPLES = NEG_TABLE.index.get_level_values('sample').unique().tolist()
-except:
-    print("\nNo negative control samples detected\n")
-    NEG_SAMPLES = []    
-INPUT_TABLE = find_input_data(READSDIR, "all", SUFFIX)
+SAMPLES = glob_wildcards(os.path.join(READSDIR,REGEX)).sample
+MAIN_SAMPLES = glob_wildcards(os.path.join(READSDIR,REGEX_MAIN)).sample
+NEG_SAMPLES = glob_wildcards(os.path.join(READSDIR,REGEX_NEG)).sample
 
 if ISOLATES != False:
     MAIN_SAMPLES = [i for i in MAIN_SAMPLES if any(b in i for b in ISOLATES)]
@@ -103,14 +59,12 @@ else:
 
 if not os.path.isfile(REFERENCE+'.fai'):
     os.system("samtools faidx {} 2> /dev/null".format(REFERENCE))
-if not os.path.isfile(REFERENCE+'.bwt'):
-    os.system("bwa index {} 2> /dev/null".format(REFERENCE))
 
 TODAY=date.today().strftime("%Y-%m-%d")
 
-################
+#################
 # Desired outputs
-################
+#################
 
 rule final_qc:
     input:
@@ -134,7 +88,8 @@ rule final_qc:
 
 rule fastp:
     input:
-        get_fastq,
+        r1 = os.path.join(READSDIR,"{sample}"+SUFFIX),
+        r2 = os.path.join(READSDIR,"{sample}"+SUFFIX_R2)
     output:
         fq1  = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R1.fq.gz"),
         fq2  = os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R2.fq.gz"),
@@ -145,7 +100,6 @@ rule fastp:
     log:
         os.path.join(RESULT_DIR,"{sample}/fastp/{sample}.log.txt")
     params:
-        in_and_out_files =  get_trim_names,
         sampleName = "{sample}",
         qualified_quality_phred = 20,
         cut_mean_quality = 20,
@@ -167,7 +121,10 @@ rule fastp:
         --length_required 50 \
         --html {output.html} \
         --json {output.json} \
-        {params.in_and_out_files} \
+        -i {input.r1} \
+        -I {input.r2} \
+        -o {output.fq1} \
+        -O {output.fq2} \
         2>{log}
         """
 
@@ -189,7 +146,7 @@ rule bwa_map_sort:
         reference = REFERENCE
     resources: cpus=4
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     shell:
         """
         bwa mem -t {threads} {params.reference} \
@@ -215,7 +172,7 @@ rule ivar_trim:
         prefix = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim")
     resources: cpus=4
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     shell:
         """
         touch {output.sort_trim_bam}
@@ -239,7 +196,7 @@ rule genomecov:
         scheme = SCHEME_NAME,
     resources: cpus=1
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     shell:
         """
         touch {output.amp_plot}
@@ -258,7 +215,7 @@ rule qualimap:
         outdir = os.path.join(RESULT_DIR, "{sample}/bamqc")
     resources: cpus=1
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     run:
         cmd = "qualimap bamqc -bam {0} -nt {1} -outdir {2} 2&> /dev/null".format(input.bam, threads,params.outdir)
         p = subprocess.Popen(cmd, shell= True, stdout= subprocess.PIPE, stderr= subprocess.PIPE)
@@ -285,7 +242,7 @@ rule samtools_mpileup:
     params:
         reference = REFERENCE
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     resources: cpus=4
     shell:
         """
@@ -314,7 +271,7 @@ rule ivar_variants:
         con_freq = CON_FREQ,
         snv_freq = 0.1
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     resources: cpus=4
     shell:
         """
@@ -354,7 +311,7 @@ rule lofreq_variants:
         snv_freq = 0.1,
         con_freq = CON_FREQ
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     resources: cpus=8
     shell:
         """
@@ -396,7 +353,7 @@ rule generate_consensus:
         reference = REFERENCE,
         freq = CON_FREQ
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     resources: cpus=1
     shell:
         """
@@ -417,7 +374,7 @@ rule snpeff:
     params:
         prefix = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.snpeff")
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     resources: cpus=1
     shell:
         """
@@ -443,7 +400,7 @@ rule sample_qc:
     params:
         sample = "{sample}"
     wildcard_constraints:
-        sample="(?!NC)(?!NEG).*"
+        sample="(?!NC_)(?!NEG_).*"
     run:
         lineages = pd.read_csv(input.lineages)
         lineages.loc[0,'taxon'] = params.sample
@@ -480,7 +437,7 @@ rule kraken2:
     params:
         KRAKEN2_DB = KRAKEN2_DB
     wildcard_constraints:
-        sample = "(NC|NEG).*"
+        sample = "(NC_|NEG_).*"
     threads: 4
     resources:
         mem_mb=55000,
@@ -505,7 +462,7 @@ rule neg_qc:
         today = TODAY,
         sample = "{sample}"
     wildcard_constraints:
-        sample = "(NC|NEG).*"
+        sample = "(NC_|NEG_).*"
     run:
         df=pd.DataFrame(columns=['ID','NoReads','NoBases','%Ref','Mean Cov','std','pangolin lineage', 'scorpio_call','QC'])
         try:

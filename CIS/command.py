@@ -39,7 +39,7 @@ def main(sysargs = sys.argv[1:]):
            /^\/^\\  COVID
          _|__|  O|  Illumina
 \/     /~     \_/ \\    Pipeline
- \____|__________/  \\      Snakemake edition v0.3.0
+ \____|__________/  \\      Snakemake edition v{}
         \_______      \\
                 `\     \                 \\
                   |     |                  \\
@@ -53,7 +53,7 @@ def main(sysargs = sys.argv[1:]):
           \      ~-____-~    _-~    ~-_    ~-_-~    /
             ~-_           _-~          ~-_       _-~
                ~--______-~                ~-___-~    \033[0m
-    '''
+    '''.format(__version__)
     )
 
     max_mem = round(bytesto(virtual_memory().available, 'm'))
