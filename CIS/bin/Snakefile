@@ -112,7 +112,7 @@ TODAY=date.today().strftime("%Y-%m-%d")
 ################
 # Optional removal of trimmed reads (to save space)
 ################
-if args.delete_reads == True:
+if args.keep_reads == False:
     onsuccess:
         print("Removing trimmed reads (input reads remain untouched)\n")
         dead_reads = glob.glob(outdir + '/**/*trimmed*.gz', recursive=True)
