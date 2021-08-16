@@ -77,6 +77,7 @@ def main(sysargs = sys.argv[1:]):
     parser.add_argument('-s','--scheme', action="store",required=False,default='midnight',help="Primer scheme to use: built-in opts are 'midnight', 'swift', 'eden', but if using your own scheme provide the full path to the bed file here  (Default: {})".format('midnight'))
     parser.add_argument('-t','--threads',action="store",help="Number of threads to use", default = psutil.cpu_count(logical=True), metavar='<int>')
     parser.add_argument('-v','--variant_caller',action="store",help="Variant caller to use. Choices: 'lofreq' or 'ivar' Default: 'lofreq'", default = 'lofreq')
+    parser.add_argument('--delete_reads',action="store_true",help="Keep trimmed reads", default = False)
     parser.add_argument("--version", action='version', version=f"covid illumina pipeline snakemake edition:  {__version__}")
     parser.add_argument('--suffix',action="store",help="Suffix used to identify samples from reads. Default: {}".format("_L001_R1_001.fastq.gz"), metavar="<str>")
     parser.add_argument('--max_memory',action="store",help="Maximum memory (in MB) that you would like to provide to snakemake. Default: {}MB".format(max_mem), metavar="<int>")
@@ -190,6 +191,7 @@ def main(sysargs = sys.argv[1:]):
         "suffix":suffix,
         "threads":args.threads,
         "consensus_freq":consensus_freq,
+        "delete_reads":args.delete_reads,
         "verbose":args.verbose
         }
 

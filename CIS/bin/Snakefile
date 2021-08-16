@@ -10,6 +10,7 @@ Created on Wed Jul 21 15:43:06 2021
 ###########
 
 import os
+import glob
 import re
 from datetime import date
 import pandas as pd
@@ -107,6 +108,16 @@ if not os.path.isfile(REFERENCE+'.bwt'):
     os.system("bwa index {} 2> /dev/null".format(REFERENCE))
 
 TODAY=date.today().strftime("%Y-%m-%d")
+
+################
+# Optional removal of trimmed reads (to save space)
+################
+if args.delete_reads == True:
+    onsuccess:
+        print("Removing trimmed reads (input reads remain untouched)\n")
+        dead_reads = glob.glob(outdir + '/**/*trimmed*.gz', recursive=True)
+        [os.remove(x) for x in dead_reads]
+
 
 ################
 # Desired outputs
@@ -487,6 +498,8 @@ rule kraken2:
         cpus=4
     shell:
         """
+        touch '{output.result}'
+        touch '{output.report}'
         kraken2 --threads 4 \
         --gzip-compressed \
         '{input.forward_reads}' '{input.reverse_reads}' \
@@ -515,5 +528,5 @@ rule neg_qc:
             else:
                 df.loc[0]=[params.sample,neg.shape[0],sum(neg[3]),'-','-','-','-','-','PASS']
         except:
-            df.loc[llen]=[params.sample,'No_reads',0,'-','-','-','-','-','PASS']
+            df.loc[0]=[params.sample,'No_reads',0,'-','-','-','-','-','PASS']
         df.to_csv(output.report, header=True,index=False)
