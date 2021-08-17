@@ -1,6 +1,7 @@
 *
 .*
 !README.md
+!LICENSE
 !.gitignore
 !CIS/
 !CIS/*
