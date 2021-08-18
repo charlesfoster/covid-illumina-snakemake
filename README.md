@@ -2,7 +2,7 @@
            /^\/^\  COVID
          _|__|  O|  Illumina
 \/     /~     \_/ \    Pipeline
- \____|__________/  \      Snakemake edition v0.1.0
+ \____|__________/  \      Snakemake edition
         \_______      \
                 `\     \                 \
                   |     |                  \
@@ -98,11 +98,11 @@ By default, the program assumes that you have used the 'Midnight' amplicon proto
 All other options are as follows, and can be accessed with `CIS --help`:
 
 ```
-[92m
+
            /^\/^\  COVID
          _|__|  O|  Illumina
 \/     /~     \_/ \    Pipeline
- \____|__________/  \      Snakemake edition v0.2.0
+ \____|__________/  \      Snakemake edition
         \_______      \
                 `\     \                 \
                   |     |                  \
@@ -115,7 +115,7 @@ All other options are as follows, and can be accessed with `CIS --help`:
          (      (        _-~    _--_    ~-_     _/   |
           \      ~-____-~    _-~    ~-_    ~-_-~    /
             ~-_           _-~          ~-_       _-~
-               ~--______-~                ~-___-~    [0m
+               ~--______-~                ~-___-~    
 
 usage: CIS [options] <query_directory>
 
