@@ -76,11 +76,13 @@ VARIANT_PROGRAM = os.path.basename(config['variant_program'])
 SCHEME_NAME = os.path.basename(SCHEME)
 KRAKEN2_DB = config["kraken2_db"]
 CON_FREQ = config["consensus_freq"]
+KEEP_READS = config["keep_reads"]
 
 SUFFIX = config['suffix']
 SUFFIX = SUFFIX.replace('R2','R1')
 
 MAIN_TABLE = find_input_data(READSDIR, "main", SUFFIX)
+MAIN_TABLE.to_csv( os.path.join(RESULT_DIR,"sample_sheet.csv"), index=False, header=True)
 MAIN_SAMPLES = MAIN_TABLE.index.get_level_values('sample').unique().tolist()
 try:
     NEG_TABLE = find_input_data(READSDIR, "neg", SUFFIX)
@@ -112,10 +114,10 @@ TODAY=date.today().strftime("%Y-%m-%d")
 ################
 # Optional removal of trimmed reads (to save space)
 ################
-if args.keep_reads == False:
+if KEEP_READS == False:
     onsuccess:
         print("Removing trimmed reads (input reads remain untouched)\n")
-        dead_reads = glob.glob(outdir + '/**/*trimmed*.gz', recursive=True)
+        dead_reads = glob.glob(RESULT_DIR + '/**/*trimmed*.gz', recursive=True)
         [os.remove(x) for x in dead_reads]
 
 
