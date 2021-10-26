@@ -6,8 +6,7 @@ channels:
 dependencies:
   - bedtools
   - bwa>=0.7.17
-#  - lofreq #removed until conda versions support htslib>=1.13
-#  - ivar #removed until conda versions support htslib>=1.13
+  - mamba
   - fastp
   - kraken2
   - pip

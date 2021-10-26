@@ -8,3 +8,4 @@
 !CIS/bin/*
 !setup.py
 !environment.yml
+CIS/bin/old_snakefiles

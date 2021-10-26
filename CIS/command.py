@@ -151,12 +151,12 @@ def main(sysargs = sys.argv[1:]):
         variant_caller = args.variant_caller
     else:
         variant_caller = 'lofreq'
-    variant_caller = shutil.which(variant_caller)
+    #variant_caller = shutil.which(variant_caller)
 
     # ivar is still necessary for trimming
-    if shutil.which('ivar') is None:
-        print('#####\n\033[91mError\033[0m: "ivar" is necessary for amplicon trimming but is not in your path\n#####\n')
-        sys.exit(1)
+    #if shutil.which('ivar') is None:
+    #    print('#####\n\033[91mError\033[0m: "ivar" is necessary for amplicon trimming but is not in your path\n#####\n')
+    #    sys.exit(1)
 
     if variant_caller is None:
         print('#####\n\033[91mError\033[0m: {} could not be found in your path\n#####\n'.format(variant_caller))
@@ -208,11 +208,11 @@ def main(sysargs = sys.argv[1:]):
         for k in config:
             print(k+": ", config[k])
 
-        status = snakemake.snakemake(snakefile, dryrun=args.dry_run,printshellcmds=True, forceall=args.force, force_incomplete=True,
+        status = snakemake.snakemake(snakefile, use_conda=True, conda_frontend='mamba', dryrun=args.dry_run,printshellcmds=True, forceall=args.force, force_incomplete=True,
                                         resources=max_mem,config=config,quiet=False,cores=args.threads,lock=False
                                         )
     else:
-            status = snakemake.snakemake(snakefile, dryrun=args.dry_run,printshellcmds=False, forceall=args.force, force_incomplete=True,
+            status = snakemake.snakemake(snakefile, use_conda=True, conda_frontend='mamba', dryrun=args.dry_run,printshellcmds=False, forceall=args.force, force_incomplete=True,
                                     resources=max_mem,config=config,quiet=True,cores=args.threads,lock=False
                                     )
 

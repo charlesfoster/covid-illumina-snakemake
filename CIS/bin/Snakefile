@@ -84,6 +84,7 @@ SUFFIX = SUFFIX.replace('R2','R1')
 MAIN_TABLE = find_input_data(READSDIR, "main", SUFFIX)
 MAIN_TABLE.to_csv( os.path.join(RESULT_DIR,"sample_sheet.csv"), index=False, header=True)
 MAIN_SAMPLES = MAIN_TABLE.index.get_level_values('sample').unique().tolist()
+
 try:
     NEG_TABLE = find_input_data(READSDIR, "neg", SUFFIX)
     NEG_SAMPLES = NEG_TABLE.index.get_level_values('sample').unique().tolist()
@@ -111,6 +112,9 @@ if not os.path.isfile(REFERENCE+'.bwt'):
 
 TODAY=date.today().strftime("%Y-%m-%d")
 
+if os.path.isfile(os.path.join(RESULT_DIR,TODAY+"_softwareVersions.txt")):
+    os.remove(os.path.join(RESULT_DIR,TODAY+"_softwareVersions.txt"))
+
 ################
 # Optional removal of trimmed reads (to save space)
 ################
@@ -124,6 +128,47 @@ if KEEP_READS == False:
 ################
 # Desired outputs
 ################
+if VARIANT_PROGRAM == 'lofreq':
+    variant_conda_env = "lofreq.yaml"
+else:
+    variant_conda_env = "ivar.yaml"
+
+rule collect_variant_version:
+    input:
+        software = os.path.join(RESULT_DIR,TODAY+"_softwareVersions_v1.txt")
+    output:
+        software = os.path.join(RESULT_DIR,TODAY+"_softwareVersions.txt")
+    params:
+        variant_program = VARIANT_PROGRAM
+    conda:
+        variant_conda_env
+    shell:
+        """
+        cp {input.software} {output.software}
+        if [ {params.variant_program} == "lofreq" ]; then
+          printf "lofreq\t$(lofreq version | tr "\n" "\t")\n" >> {output.software}
+        elif [ {params.variant_program} == "ivar" ]; then
+          printf "$(ivar version | head -n1)\n" >> {output.software}
+        fi
+        """
+
+rule collect_main_versions:
+    input:
+        qc_file = os.path.join(RESULT_DIR,TODAY+"_QC.csv")
+    output:
+        software = temp(os.path.join(RESULT_DIR,TODAY+"_softwareVersions_v1.txt"))
+    shell:
+        """
+        fastp -v 2>> {output.software}
+        bedtools --version >> {output.software}
+        printf "qualimap v.2.2.2-dev\n" >> {output.software}
+        bcfVer=$(bcftools --version | head -n2 | tr "\n" " ")
+        printf "$bcfVer\n" >> {output.software}
+        samVer=$(samtools --version | head -n2 | tr "\n" " ")
+        printf "$samVer\n" >> {output.software}
+        eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --all-versions >> {output.software}
+        kraken2 --version | head -n1 >> {output.software}
+        """
 
 rule final_qc:
     input:
@@ -131,6 +176,8 @@ rule final_qc:
         coverage_plot = expand(os.path.join(RESULT_DIR, "{sample}/coverage/{sample}.coverage_plots.pdf"), sample = MAIN_SAMPLES),
         neg_reports = expand(os.path.join(RESULT_DIR, "{sample}.qc_results.csv"), sample = NEG_SAMPLES),
         sample_reports = expand(os.path.join(RESULT_DIR, "{sample}.qc_results.csv"), sample = MAIN_SAMPLES)
+    output:
+        qc_file = os.path.join(RESULT_DIR,TODAY+"_QC.csv")
     message:
         "Pipeline complete!"
     run:
@@ -139,7 +186,6 @@ rule final_qc:
         combined_csv.to_csv( os.path.join(RESULT_DIR,TODAY+"_QC.csv"), index=False, header=True)
         with open(os.path.join(RESULT_DIR,"config.yaml"), 'w') as outfile:
             yaml.dump(config, outfile, default_flow_style=False)
-
 
 ########################
 # Rules - common
@@ -226,6 +272,9 @@ rule ivar_trim:
         bedfile = SCHEME,
         offset = IVAR_OFFSET,
         prefix = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim")
+    conda:
+        "ivar.yaml"
+        #"docker://quay.io/biocontainers/ivar:1.3.1--h3198e80_1"
     resources: cpus=4
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*"
@@ -233,7 +282,7 @@ rule ivar_trim:
         """
         touch {output.sort_trim_bam}
         ivar trim -i {input.bam} -x {params.offset} -b {params.bedfile} -p {params.prefix} -e 2&> {log}
-        samtools sort -@ {threads} --write-index {params.trim_bam} -o {output.sort_trim_bam} 2> /dev/null
+        samtools sort -@ {threads} {params.trim_bam} -o {output.sort_trim_bam} 2> /dev/null
         samtools index {output.sort_trim_bam}
         """
 
@@ -309,9 +358,7 @@ rule ivar_variants:
     input:
         mpileup  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.mpileup")
     output:
-        vcf_file  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz"),
-        temp_vcf_file = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf")),
-        temp_vcf_file2 = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf.gz"))
+        temp_vcf_file = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf"))
     message:"calling variants for {wildcards.sample}"
     threads: 4
     log:
@@ -328,27 +375,20 @@ rule ivar_variants:
         snv_freq = 0.1
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*"
-    resources: cpus=4
+    conda:
+        "ivar.yaml"
+    resources: 
+        cpus=4
     shell:
         """
         cat {input.mpileup} | ivar variants -p {params.prefix} -r {params.reference} -q {params.qual} -m {params.depth} -t {params.snv_freq} 2&>{log}
         python {params.converter} {params.tsv_file} {output.temp_vcf_file} 2> {log}
-        bgzip -c {output.temp_vcf_file} > {output.temp_vcf_file2}
-        bcftools index {output.temp_vcf_file2}
-        bcftools norm -Ou -a -m - {output.temp_vcf_file2} 2> {log} | \
-        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= 10" -Oz -o {output.vcf_file} {output.temp_vcf_file2}
-        bcftools index {output.vcf_file}
-        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= 10' -n 'c:0/1' 2> {log}| \
-        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.con_freq}' -n . 2>> {log} | \
-        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= {params.con_freq} & INFO/DP >= 10' -n 'c:1/1' 2> {log}
-        bcftools index -f {output.vcf_file}
         """
 
 rule lofreq_variants:
     input:
         bam = os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam")
     output:
-        vcf_file  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz"),
         new_bam = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam")),
         new_bam_index = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam.bai")),
         tmp_vcf1 = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")),
@@ -363,12 +403,13 @@ rule lofreq_variants:
         vcf_script = VCF_MOD,
         prefix = "{sample}",
         reference = REFERENCE,
-        depth = 10,
-        snv_freq = 0.1,
-        con_freq = CON_FREQ
+        depth = 10
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*"
-    resources: cpus=8
+    conda:
+        "lofreq.yaml"
+    resources: 
+        cpus=8
     shell:
         """
         lofreq indelqual --dindel {input.bam} -f {params.reference} | \
@@ -377,13 +418,67 @@ rule lofreq_variants:
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
         bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
-        bcftools +fill-tags {output.tmp_vcf2} -Ou -- -t "TYPE" | \
+        """
+
+rule lofreq_bcftools_setGT:
+    input:
+        vcf_file = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz")
+    output:
+        vcf_file  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz")
+    log:
+        os.path.join(RESULT_DIR,"{sample}/variants/{sample}.bcftools_setGT.log")
+    params:
+        snv_freq = 0.1,
+        con_freq = CON_FREQ
+    message:
+        "setting conditional GT for {wildcards.sample}"
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*"
+    shell:
+        """
+        bcftools index {input.vcf_file}
+        bcftools +fill-tags {input.vcf_file} -Ou -- -t "TYPE" | \
         bcftools norm -Ou -a -m -  2> /dev/null | \
         bcftools view -f 'PASS,.' -i "INFO/AF >= {params.snv_freq}" -Oz -o {output.vcf_file}
         bcftools index {output.vcf_file}
         bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
         bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.con_freq}' -n . 2>> {log} | \
         bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF >= {params.con_freq}' -n 'c:1/1' 2>> {log}
+        bcftools index -f {output.vcf_file}
+        """
+
+rule ivar_bcftools_setGT:
+    input:
+        vcf_file = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf")
+    output:
+        variant_types = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.variant_types.txt.gz")),
+        hdr = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.hdr.txt")),
+        vcf_file  = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz"),
+        tmp_vcf = temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf.gz"))
+    log:
+        os.path.join(RESULT_DIR,"{sample}/variants/{sample}.bcftools_setGT.log")
+    params:
+        snv_freq = 0.1,
+        con_freq = CON_FREQ
+    message:
+        "setting conditional GT for {wildcards.sample}"
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*"
+    shell:
+        """
+        bgzip -f {input.vcf_file}
+        bcftools index {output.tmp_vcf}
+        bcftools query {output.tmp_vcf} -f'%CHROM\t%POS\t%TYPE\n' | bgzip > {output.variant_types}
+        tabix -s1 -b2 -e2 {output.variant_types}
+        echo '##INFO=<ID=TYPE,Number=.,Type=String,Description="Variant type">' > {output.hdr}
+        bcftools annotate -a {output.variant_types} -h {output.hdr} -c CHROM,POS,TYPE -Oz -o {output.tmp_vcf} {output.tmp_vcf}
+        bcftools index {output.tmp_vcf}
+        bcftools norm -Ou -a -m - {output.tmp_vcf} 2> {log} | \
+        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= 10" -Oz -o {output.vcf_file} {output.tmp_vcf}
+        bcftools index {output.vcf_file}
+        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= 10' -n 'c:0/1' 2> {log}| \
+        bcftools +setGT -- -t q -i 'TYPE="indel" && FORMAT/ALT_FREQ < {params.con_freq}' -n . 2>> {log} | \
+        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= {params.con_freq} & INFO/DP >= 10' -n 'c:1/1' 2> {log}
         bcftools index -f {output.vcf_file}
         """
 
@@ -414,10 +509,19 @@ rule generate_consensus:
     shell:
         """
         bcftools query -f'%CHROM\t%POS0\t%END\n' {input.vcf_file} > {output.variants_bed}
-        bedtools genomecov -bga -ibam {input.bam} | awk '$4 < 10' | \
-        bedtools subtract -a - -b {output.variants_bed} > {output.mask}
-        bcftools consensus -p {params.prefix} -f {params.reference} --mark-del '-' -m {output.mask} -H I -i 'INFO/DP >= 10 & GT!="mis"' {input.vcf_file} 2> {log} | \
-        sed "/^>/s/{params.prefix}.*/{params.prefix}/" > {output.consensus}
+        varCheck=$(file {output.variants_bed} | cut -f2 -d " ")
+        if [ $varCheck == "empty" ]; then
+            echo "BAM file was empty for {params.prefix}. Making empty consensus genome."
+            emptySeq=$(printf %.1s N{{1..29903}})
+            printf ">{params.prefix}\n$emptySeq\n" > {output.consensus}
+            touch {output.mask}
+            touch {output.variants_bed}
+        else
+            bedtools genomecov -bga -ibam {input.bam} | awk '$4 < 10' | \
+            bedtools subtract -a - -b {output.variants_bed} > {output.mask}
+            bcftools consensus -p {params.prefix} -f {params.reference} --mark-del '-' -m {output.mask} -H I -i 'INFO/DP >= 10 & GT!="mis"' {input.vcf_file} 2> {log} | \
+            sed "/^>/s/{params.prefix}.*/{params.prefix}/" > {output.consensus}
+        fi
         """
 
 rule snpeff:

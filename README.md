@@ -54,19 +54,9 @@ pip install .
 
 Other dependencies:
 * Lineages are typed using `pangolin`. Accordingly, `pangolin` needs to be installed according to instructions at https://github.com/cov-lineages/pangolin.
-* Variants are called using either `lofreq` (preferred) or `ivar`. Ideally we could install these via `mamba`, but the hosted versions do not yet support htslib>=1.13 (needed for our specific `bcftools commands`). Install each program according to the documentation of each program:
-  - `lofreq`: https://csb5.github.io/lofreq/installation/
-  - `ivar`: https://github.com/andersen-lab/ivar#insallation (not my typo). Note: the official instructions for compiling from source are a pain. I recommend installing `ivar` via `conda`/`mamba` (easiest), *but for now you will need to install it into a different environment than CIS, and add that environment's `bin/` to your path*.
+* Variants are called using either `lofreq` (preferred) or `ivar`. Ideally we could install these via `mamba` in the main `environment.yml` file, but the hosted versions do not yet support htslib>=1.13 (needed for our specific `bcftools commands`). Both `lofreq` and `ivar` are currently installed into their own environments during execution of the CIS pipeline. These environments are only created the first time you run the pipeline, and then subsequent runs use the isolated `lofreq` and `ivar` environments automatically.
 
-Example command for installing `ivar`:
-
-```
-conda create -n ivar_env ivar=1.3.1
-echo 'export PATH=$PATH:/home/cfos/miniconda3/envs/ivar_env/bin' >> ~/.bashrc
-source ~/.bashrc
-```
-
-`ivar` should now be detected on your path successfully. If you already have `ivar` installed elsewhere, add that location to your `$PATH` instead. This installation will be less of a pain when `ivar` with htslib==1.13 dependency is on a conda repository.
+**tl;dr**: you don't need to do anything for `lofreq` or `ivar` to work; just don't get confused during the initial pipeline run when the terminal indicates creation of a new conda environment. You should run `CIS` from the same directory each time, otherwise a new conda environment will be created each time.
 
 # Usage
 The environment with all necessary tools is installed as '`CIS`' for brevity. The environment should first be activated:
@@ -117,47 +107,51 @@ All other options are as follows, and can be accessed with `CIS --help`:
             ~-_           _-~          ~-_       _-~
                ~--______-~                ~-___-~    
 
-usage: CIS [options] <query_directory>
+      usage: CIS [options] <query_directory>
 
-covid-illumina-snakemake: a pipeline for analysis SARS-CoV-2 samples
+      covid-illumina-snakemake: a pipeline for analysis SARS-CoV-2 samples
 
-positional arguments:
-  query_directory       Path to directory with reads to process.
+      positional arguments:
+         query_directory       Path to directory with reads to process.
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -i ISOLATES, --isolates ISOLATES
-                        List of isolates to assemble (Default: all isolates in
-                        query_directory)
-  -f, --force           Force overwriting of completed files (Default: files
-                        not overwritten)
-  -k KRAKEN2_DB, --kraken2_db KRAKEN2_DB
-                        kraken2 database. Default:
-                        /data/kraken_files/k2_standard_20201202
-  -n, --dry_run         Dry run only
-  -o OUTDIR, --outdir OUTDIR
-                        Output directory. Default: /home/cfos/Programs/COVID_I
-                        llumina_Snakemake/results/2021-07-27
-  -p, --print_dag       Save directed acyclic graph (DAG) of workflow
-  -r REFERENCE, --reference REFERENCE
-                        Reference genome to use (Default:
-                        /home/cfos/miniconda3/envs/CIS/lib/python3.9/site-
-                        packages/CIS/bin/NC_045512.fasta)
-  -s SCHEME, --scheme SCHEME
-                        Primer scheme to use: built-in opts are 'midnight',
-                        'swift', 'eden', but if using your own scheme provide
-                        the full path to the bed file here (Default: midnight)
-  -t <int>, --threads <int>
-                        Number of threads to use
-  -v VARIANT_CALLER, --variant_caller VARIANT_CALLER
-                        Variant caller to use. Choices: 'lofreq' or 'ivar'
-                        Default: 'lofreq'
-  --version             show program's version number and exit
-  --suffix <str>        Suffix used to identify samples from reads. Default:
-                        _L001_R1_001.fastq.gz
-  --max_memory <int>    Maximum memory (in MB) that you would like to provide
-                        to snakemake. Default: 51580MB
-  --verbose             Print junk to screen.
+      optional arguments:
+         -h, --help            show this help message and exit
+         -c <int>, --consensus_freq <int>
+                               Variant allele frequency threshold for a variant to be
+                               incorporated into consensus genome. Default: 0.9
+         -i ISOLATES, --isolates ISOLATES
+                               List of isolates to assemble (Default: all isolates in
+                               query_directory)
+         -f, --force           Force overwriting of completed files (Default: files
+                               not overwritten)
+         -k KRAKEN2_DB, --kraken2_db KRAKEN2_DB
+                               kraken2 database. Default:
+                               /data/kraken_files/k2_standard_20201202
+         -n, --dry_run         Dry run only
+         -o OUTDIR, --outdir OUTDIR
+                               Output directory. Default: /home/cfos/Programs/COVID_I
+                               llumina_Snakemake/results/2021-10-27
+         -p, --print_dag       Save directed acyclic graph (DAG) of workflow
+         -r REFERENCE, --reference REFERENCE
+                               Reference genome to use (Default:
+                               /home/cfos/miniconda3/envs/CIS/lib/python3.9/site-
+                               packages/CIS/bin/NC_045512.fasta)
+         -s SCHEME, --scheme SCHEME
+                               Primer scheme to use: built-in opts are 'midnight',
+                               'swift', 'eden', but if using your own scheme provide
+                               the full path to the bed file here (Default: midnight)
+         -t <int>, --threads <int>
+                               Number of threads to use
+         -v VARIANT_CALLER, --variant_caller VARIANT_CALLER
+                               Variant caller to use. Choices: 'lofreq' or 'ivar'
+                               Default: 'lofreq'
+         --keep_reads          Keep trimmed reads
+         --version             show program's version number and exit
+         --suffix <str>        Suffix used to identify samples from reads. Default:
+                               _L001_R1_001.fastq.gz
+         --max_memory <int>    Maximum memory (in MB) that you would like to provide
+                               to snakemake. Default: 58683MB
+         --verbose             Print junk to screen.
 ```
 
 # What does the pipeline do?
