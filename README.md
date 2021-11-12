@@ -1,3 +1,4 @@
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 ```
            /^\/^\  COVID
          _|__|  O|  Illumina
@@ -219,3 +220,4 @@ You should also find citations for the R packages in the `environment.yml` file.
 
 # Other credits
 *  `ivar_variants_to_vcf.py` was written originally by the nextflow/viralrecon team. I've modified it for our purposes.
+* Being new to using snakemake + wrapper scripts, I used `pangolin` as a guide for directory structure and rule creation.

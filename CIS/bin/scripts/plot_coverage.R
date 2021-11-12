@@ -49,7 +49,7 @@ y_max <- (mean(df$Coverage)/10)
 y_min <- 0
 
 pos1 <- -y_max*3
-plot1 <- ggplot(df, aes(x=Site, y=Coverage)) + geom_line() + labs(x = "Site in SARS-CoV-2 Genome", y = "Coverage") 
+plot1 <- ggplot(df, aes(x=Site, y=Coverage)) + geom_line() + labs(title = paste0("Coverage plot: ", args[6]), x = "Site in SARS-CoV-2 Genome", y = "Coverage") 
 plot1 <- plot1 + annotate("rect", xmin = 0,   xmax = 265, ymin = y_min, ymax = y_max, alpha = .2, fill = "blue")
 plot1 <- plot1 + annotate("rect", xmin = 266,   xmax = 21555, ymin = y_min, ymax = y_max, alpha = .2, fill = "red")
 plot1 <- plot1 + annotate("rect", xmin = 21563, xmax = 25384, ymin = y_min, ymax = y_max, alpha = .2, fill = "blue")
@@ -81,7 +81,7 @@ plot2 <- ggplot(df, aes(x=Site, y=Coverage_Capped)) +
   geom_line() + labs(x = "Site in SARS-CoV-2 Genome", y = "Coverage (capped at 50)") 
 
 plot3 <- ggplot(amplicons, aes(x=Amplicon, y=Coverage)) + 
-  geom_bar(stat="identity", color="blue") + labs(x = "Amplicon", y = "Mean Coverage") +
+  geom_bar(stat="identity", color="blue") + labs(title = paste("Mean coverage per amplicon for: ", args[6], " (", gsub(".bed","",args[5]), " protocol)", sep=""), x = "Amplicon", y = "Mean Coverage") +
   coord_flip() + scale_x_discrete(limits = rev(levels(amplicons$Amplicon)))
 
 coverage_plot <- ggarrange(plot1, plot3, labels = c("A", "B"), ncol = 1, nrow = 2, align = "v")

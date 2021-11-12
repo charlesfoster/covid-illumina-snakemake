@@ -1,0 +1,564 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Nov 12 12:59:25 2021
+
+@author: cfos
+"""
+########################
+# Clinical sample workflow
+########################
+
+
+rule bwa_map_sort:
+    input:
+        r1=os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R1.fq.gz"),
+        r2=os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R2.fq.gz"),
+    output:
+        bam=os.path.join(RESULT_DIR, "{sample}/{sample}.sorted.bam"),
+    message:
+        "mapping {wildcards.sample} reads to reference"
+    threads: 4
+    log:
+        os.path.join(RESULT_DIR, "{sample}/{sample}.bwa.log"),
+    params:
+        reference=REFERENCE,
+    resources:
+        cpus=4,
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    shell:
+        """
+        bwa mem -t {threads} {params.reference} \
+        {input.r1} {input.r2} 2> {log} | \
+        samtools sort -@ {threads} 2> {log} | \
+        samtools view -@ {threads} -F 4 --write-index -o {output.bam} 2> /dev/null
+        samtools index {output.bam}
+        """
+
+
+rule ivar_trim:
+    input:
+        bam=os.path.join(RESULT_DIR, "{sample}/{sample}.sorted.bam"),
+    output:
+        sort_trim_bam=os.path.join(
+            RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"
+        ),
+    message:
+        "mapping {wildcards.sample} reads to reference"
+    threads: 4
+    log:
+        os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar_trim.log"),
+    params:
+        trim_bam=temp(os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.bam")),
+        bedfile=SCHEME,
+        offset=IVAR_OFFSET,
+        prefix=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim"),
+    conda:
+        "../envs/ivar.yaml"
+        #"docker://quay.io/biocontainers/ivar:1.3.1--h3198e80_1"
+    resources:
+        cpus=4,
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    shell:
+        """
+        touch {output.sort_trim_bam}
+        ivar trim -i {input.bam} -x {params.offset} -b {params.bedfile} -p {params.prefix} -e 2&> {log}
+        samtools sort -@ {threads} {params.trim_bam} -o {output.sort_trim_bam} 2> /dev/null
+        samtools index {output.sort_trim_bam}
+        """
+
+
+rule genomecov:
+    input:
+        bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
+    output:
+        main_plot=report(
+            os.path.join(RESULT_DIR, "{sample}/coverage/{sample}.coverage_plots.pdf"),
+            caption="../report/coverage_plots.rst",
+            category="Coverage Plots",
+        ),
+        amp_plot=os.path.join(
+            RESULT_DIR, "{sample}/coverage/{sample}.check_amplicons.pdf"
+        ),
+    message:
+        "getting genome coverage statistics for {wildcards.sample}"
+    threads: 1
+    params:
+        coverage=temp(
+            os.path.join(RESULT_DIR, "{sample}/coverage/{sample}.coverage.txt")
+        ),
+        script=COVERAGE_SCRIPT,
+        bedfile=SCHEME,
+        scheme=SCHEME_NAME,
+    resources:
+        cpus=1,
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    shell:
+        """
+        touch {output.amp_plot}
+        bedtools genomecov -ibam {input.bam} -d > {params.coverage}  2> /dev/null
+        Rscript {params.script} {params.coverage} {params.bedfile} {output.main_plot} {output.amp_plot} {params.scheme} {wildcards.sample} 2> /dev/null
+        """
+
+
+rule qualimap:
+    input:
+        bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
+    output:
+        report=os.path.join(RESULT_DIR, "{sample}/bamqc/genome_results.txt"),
+    message:
+        "getting bamQC metrics for {wildcards.sample}"
+    threads: 1
+    params:
+        outdir=os.path.join(RESULT_DIR, "{sample}/bamqc"),
+    resources:
+        cpus=1,
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    run:
+        cmd = "qualimap bamqc -bam {0} -nt {1} -outdir {2} 2&> /dev/null".format(
+            input.bam, threads, params.outdir
+        )
+        p = subprocess.Popen(
+            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        stdout, stderr = p.communicate()
+        if "Failed to run bamqc" in str(stderr):
+            res = [
+                "BamQC report",
+                "There is a 0% of reference with a coverageData >= 10X",
+                "number of reads = 0",
+                "number of mapped bases = 0 bp",
+                "NC_045512.2	29903	0	0	0",
+            ]
+            if not os.path.exists(params.outdir):
+                os.makedirs(params.outdir)
+            with open(output.report, "w") as f:
+                f.write("\n".join(map(str, res)))
+
+
+rule samtools_mpileup:
+    input:
+        bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
+    output:
+        mpileup=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.mpileup")),
+    message:
+        "generating mpileup for {wildcards.sample}"
+    threads: 4
+    log:
+        os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.mpileup.log"),
+    params:
+        reference=REFERENCE,
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    resources:
+        cpus=4,
+    shell:
+        """
+        samtools mpileup -A -d 0 -B -Q 0 --reference {params.reference} {input.bam} -o {output.mpileup} 2>{log}
+        """
+
+
+rule ivar_variants:
+    input:
+        mpileup=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.mpileup"),
+    output:
+        temp_vcf_file=temp(
+            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf")
+        ),
+    message:
+        "calling variants for {wildcards.sample}"
+    threads: 4
+    log:
+        os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar_variants.log"),
+    params:
+        tsv_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.tsv"),
+        bedfile=SCHEME,
+        prefix=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar"),
+        reference=REFERENCE,
+        converter=CONVERTER,
+        qual=20,
+        depth=10,
+        con_freq=CON_FREQ,
+        snv_freq=0.1,
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    conda:
+        "../envs/ivar.yaml"
+    resources:
+        cpus=4,
+    shell:
+        """
+        cat {input.mpileup} | ivar variants -p {params.prefix} -r {params.reference} -q {params.qual} -m {params.depth} -t {params.snv_freq} 2&>{log}
+        python {params.converter} {params.tsv_file} {output.temp_vcf_file} 2> {log}
+        """
+
+
+rule lofreq_variants:
+    input:
+        bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
+    output:
+        new_bam=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam")),
+        new_bam_index=temp(
+            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam.bai")
+        ),
+        tmp_vcf1=temp(
+            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")
+        ),
+        tmp_vcf2=temp(
+            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz")
+        ),
+        tmp_vcf1_index=temp(
+            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz.tbi")
+        ),
+        tmp_vcf2_index=temp(
+            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz.tbi")
+        ),
+    message:
+        "calling variants for {wildcards.sample}"
+    threads: 8
+    log:
+        os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.log"),
+    params:
+        vcf_script=VCF_MOD,
+        prefix="{sample}",
+        reference=REFERENCE,
+        depth=10,
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    conda:
+        "../envs/lofreq.yaml"
+    resources:
+        cpus=8,
+    shell:
+        """
+        lofreq indelqual --dindel {input.bam} -f {params.reference} | \
+        samtools sort -@ {threads} -o {output.new_bam} 2> /dev/null
+        samtools index {output.new_bam}
+        lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
+        -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
+        bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
+        """
+
+
+rule lofreq_bcftools_setGT:
+    input:
+        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz"),
+    output:
+        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz"),
+    log:
+        os.path.join(RESULT_DIR, "{sample}/variants/{sample}.bcftools_setGT.log"),
+    params:
+        snv_freq=0.1,
+        con_freq=CON_FREQ,
+    message:
+        "setting conditional GT for {wildcards.sample}"
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    shell:
+        """
+        bcftools index {input.vcf_file}
+        bcftools +fill-tags {input.vcf_file} -Ou -- -t "TYPE" | \
+        bcftools norm -Ou -a -m -  2> /dev/null | \
+        bcftools view -f 'PASS,.' -i "INFO/AF >= {params.snv_freq}" -Oz -o {output.vcf_file}
+        bcftools index {output.vcf_file}
+        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
+        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.con_freq}' -n . 2>> {log} | \
+        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF >= {params.con_freq}' -n 'c:1/1' 2>> {log}
+        bcftools index -f {output.vcf_file}
+        """
+
+
+rule ivar_bcftools_setGT:
+    input:
+        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf"),
+    output:
+        variant_types=temp(
+            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.variant_types.txt.gz")
+        ),
+        hdr=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.hdr.txt")),
+        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz"),
+        tmp_vcf=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf.gz")),
+    log:
+        os.path.join(RESULT_DIR, "{sample}/variants/{sample}.bcftools_setGT.log"),
+    params:
+        snv_freq=0.1,
+        con_freq=CON_FREQ,
+    message:
+        "setting conditional GT for {wildcards.sample}"
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    shell:
+        """
+        bgzip -f {input.vcf_file}
+        bcftools index {output.tmp_vcf}
+        bcftools query {output.tmp_vcf} -f'%CHROM\t%POS\t%TYPE\n' | bgzip > {output.variant_types}
+        tabix -s1 -b2 -e2 {output.variant_types}
+        echo '##INFO=<ID=TYPE,Number=.,Type=String,Description="Variant type">' > {output.hdr}
+        bcftools annotate -a {output.variant_types} -h {output.hdr} -c CHROM,POS,TYPE -Oz -o {output.tmp_vcf} {output.tmp_vcf}
+        bcftools index {output.tmp_vcf}
+        bcftools norm -Ou -a -m - {output.tmp_vcf} 2> {log} | \
+        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= 10" -Oz -o {output.vcf_file} {output.tmp_vcf}
+        bcftools index {output.vcf_file}
+        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= 10' -n 'c:0/1' 2> {log}| \
+        bcftools +setGT -- -t q -i 'TYPE="indel" && FORMAT/ALT_FREQ < {params.con_freq}' -n . 2>> {log} | \
+        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= {params.con_freq} & INFO/DP >= 10' -n 'c:1/1' 2> {log}
+        bcftools index -f {output.vcf_file}
+        """
+
+
+if VARIANT_PROGRAM == "ivar":
+    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz")
+elif VARIANT_PROGRAM == "lofreq":
+    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz")
+
+
+rule generate_consensus:
+    input:
+        vcf_file=proper_vcf,
+        bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
+    output:
+        consensus=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.fa"),
+        mask=temp(os.path.join(RESULT_DIR, "{sample}/variants/mask.bed")),
+        variants_bed=temp(os.path.join(RESULT_DIR, "{sample}/variants/variants.bed")),
+    message:
+        "calling a consensus for {wildcards.sample}"
+    threads: 1
+    log:
+        os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.log"),
+    params:
+        prefix="{sample}",
+        reference=REFERENCE,
+        freq=CON_FREQ,
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    resources:
+        cpus=1,
+    shell:
+        """
+        bcftools query -f'%CHROM\t%POS0\t%END\n' {input.vcf_file} > {output.variants_bed}
+        varCheck=$(file {output.variants_bed} | cut -f2 -d " ")
+        if [ $varCheck == "empty" ]; then
+            echo "BAM file was empty for {params.prefix}. Making empty consensus genome."
+            emptySeq=$(printf %.1s N{{1..29903}})
+            printf ">{params.prefix}\n$emptySeq\n" > {output.consensus}
+            touch {output.mask}
+            touch {output.variants_bed}
+        else
+            bedtools genomecov -bga -ibam {input.bam} | awk '$4 < 10' | \
+            bedtools subtract -a - -b {output.variants_bed} > {output.mask}
+            bcftools consensus -p {params.prefix} -f {params.reference} --mark-del '-' -m {output.mask} -H I -i 'INFO/DP >= 10 & GT!="mis"' {input.vcf_file} 2> {log} | \
+            sed "/^>/s/{params.prefix}.*/{params.prefix}/" > {output.consensus}
+        fi
+        """
+
+
+rule snpeff:
+    input:
+        vcf_file=proper_vcf,
+    output:
+        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.annotated.vcf"),
+    message:
+        "annotating variants for {wildcards.sample}"
+    threads: 1
+    params:
+        prefix=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.snpeff"),
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    resources:
+        cpus=1,
+    shell:
+        """
+        snpEff eff -csvStats {params.prefix}.stats.csv -s {params.prefix}.stats.html NC_045512.2 {input.vcf_file} > {output.vcf_file}
+        """
+
+
+rule pangolin:
+    input:
+        fasta=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.fa"),
+    output:
+        report=os.path.join(RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv"),
+    shell:
+        """
+        set +eu
+        eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --outfile {output.report} {input.fasta} &> /dev/null
+        set -eu
+        """
+
+
+rule sample_qc:
+    input:
+        bamqc=os.path.join(RESULT_DIR, "{sample}/bamqc/genome_results.txt"),
+        lineages=os.path.join(
+            RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv"
+        ),
+    output:
+        report=temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv")),
+    params:
+        sample="{sample}",
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    run:
+        lineages = pd.read_csv(input.lineages)
+        lineages.loc[0, "taxon"] = params.sample
+        qc = pd.read_csv(input.bamqc, sep="\n")
+        df = pd.DataFrame(
+            columns=[
+                "ID",
+                "NoReads",
+                "NoBases",
+                "%Ref",
+                "Mean Cov",
+                "std",
+                "pangolin lineage",
+                "scorpio_call",
+                "QC",
+            ]
+        )
+
+        ref = (
+            qc[qc["BamQC report"].str.contains("coverageData >= 10X")]
+            .iloc[0, 0]
+            .split()[3]
+        )
+        No_reads = int(
+            qc[qc["BamQC report"].str.contains("number of reads")]
+            .iloc[0]
+            .tolist()[0]
+            .split()[-1]
+            .replace(",", "")
+        )
+        No_bases = int(
+            qc[qc["BamQC report"].str.contains("number of mapped bases")]
+            .iloc[0]
+            .tolist()[0]
+            .split()[-2]
+            .replace(",", "")
+        )
+        mean_cov = int(float(qc.tail(n=1).iloc[0][0].split()[3]))
+        std = int(float(qc.tail(n=1).iloc[0][0].split()[4]))
+        lineage = lineages.loc[0, "lineage"]
+        scorpio_call = lineages.loc[0, "scorpio_call"]
+        if int(float(ref.split("%")[0])) > 79:
+            df.loc[0] = [
+                params.sample,
+                No_reads,
+                No_bases,
+                ref,
+                mean_cov,
+                std,
+                lineage,
+                scorpio_call,
+                "PASS",
+            ]
+        else:
+            df.loc[0] = [
+                params.sample,
+                No_reads,
+                No_bases,
+                ref,
+                mean_cov,
+                std,
+                lineage,
+                scorpio_call,
+                "FAIL",
+            ]
+        df.to_csv(output.report, header=True, index=False)
+
+
+########################
+# Rules - negative controls
+########################
+
+
+rule kraken2:
+    input:
+        forward_reads=os.path.join(
+            RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R1.fq.gz"
+        ),
+        reverse_reads=os.path.join(
+            RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R2.fq.gz"
+        ),
+    output:
+        result=os.path.join(RESULT_DIR, "{sample}/kraken2/{sample}.kraken_result.txt"),
+        report=os.path.join(RESULT_DIR, "{sample}/kraken2/{sample}.kraken_report.txt"),
+    log:
+        os.path.join(RESULT_DIR, "{sample}/kraken2/{sample}.kraken2.log"),
+    params:
+        KRAKEN2_DB=KRAKEN2_DB,
+    wildcard_constraints:
+        sample="(NC|NEG).*",
+    threads: 4
+    resources:
+        mem_mb=55000,
+        cpus=4,
+    shell:
+        """
+        touch '{output.result}'
+        touch '{output.report}'
+        kraken2 --threads 4 \
+        --gzip-compressed \
+        '{input.forward_reads}' '{input.reverse_reads}' \
+        --output '{output.result}' \
+        --report '{output.report}' \
+        --db '{params.KRAKEN2_DB}' \
+        2>{log}
+        """
+
+
+rule neg_qc:
+    input:
+        kraken=os.path.join(RESULT_DIR, "{sample}/kraken2/{sample}.kraken_result.txt"),
+    output:
+        report=temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv")),
+    params:
+        today=TODAY,
+        sample="{sample}",
+    wildcard_constraints:
+        sample="(NC|NEG).*",
+    run:
+        df = pd.DataFrame(
+            columns=[
+                "ID",
+                "NoReads",
+                "NoBases",
+                "%Ref",
+                "Mean Cov",
+                "std",
+                "pangolin lineage",
+                "scorpio_call",
+                "QC",
+            ]
+        )
+        try:
+            neg = pd.read_csv(input.kraken, sep="\t", header=None)
+            if sum(neg[3]) > 10000:
+                df.loc[0] = [
+                    params.sample,
+                    neg.shape[0],
+                    sum(neg[3]),
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "FAIL",
+                ]
+            else:
+                df.loc[0] = [
+                    params.sample,
+                    neg.shape[0],
+                    sum(neg[3]),
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "PASS",
+                ]
+        except:
+            df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS"]
+        df.to_csv(output.report, header=True, index=False)

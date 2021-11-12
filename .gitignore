@@ -6,6 +6,12 @@
 !CIS/
 !CIS/*
 !CIS/bin/*
+!CIS/bin/envs/*
+!CIS/bin/primer_schemes/*
+!CIS/bin/references/*
+!CIS/bin/report/*
+!CIS/bin/rules/*
+!CIS/bin/scripts/*
 !setup.py
 !environment.yml
 CIS/bin/old_snakefiles
