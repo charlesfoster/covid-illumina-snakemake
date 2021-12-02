@@ -72,7 +72,7 @@ Then, to run the pipeline, it's as simple as:
 CIS <directory_with_reads>
 ```
 
-where <directory_with_reads> should be replaced with the full path to a directory with sequencing reads taken off an Illumina machine.
+where <directory_with_reads> should be replaced with the full path to a directory with sequencing reads taken off an Illumina machine. Note that there are many additional options/settings to take advantage of (See below).
 
 The program assumes that reads are named exactly as they are after coming off a MiSeq/iSeq, i.e. `*_L001_R1_001.fastq.gz`. This unique suffix allows the correct sample names and corresponding forward and reverse reads files to be identified. However, if you have renamed your reads files, you need to provide a suffix via `--suffix` that allows the correct samples to be identified.
 
@@ -89,7 +89,6 @@ By default, the program assumes that you have used the 'Midnight' amplicon proto
 All other options are as follows, and can be accessed with `CIS --help`:
 
 ```
-
            /^\/^\  COVID
          _|__|  O|  Illumina
 \/     /~     \_/ \    Pipeline
@@ -108,52 +107,54 @@ All other options are as follows, and can be accessed with `CIS --help`:
             ~-_           _-~          ~-_       _-~
                ~--______-~                ~-___-~    
 
-      usage: CIS [options] <query_directory>
+usage: CIS [options] <query_directory>
 
-      covid-illumina-snakemake: a pipeline for analysis SARS-CoV-2 samples
+covid-illumina-snakemake: a pipeline for analysis SARS-CoV-2 samples
 
-      positional arguments:
-         query_directory       Path to directory with reads to process.
+positional arguments:
+  query_directory       Path to directory with reads to process.
 
-      optional arguments:
-         -h, --help            show this help message and exit
-         -c <int>, --consensus_freq <int>
-                               Variant allele frequency threshold for a variant to be
-                               incorporated into consensus genome. Default: 0.9
-         -i ISOLATES, --isolates ISOLATES
-                               List of isolates to assemble (Default: all isolates in
-                               query_directory)
-         -f, --force           Force overwriting of completed files (Default: files
-                               not overwritten)
-         -k KRAKEN2_DB, --kraken2_db KRAKEN2_DB
-                               kraken2 database. Default:
-                               /data/kraken_files/k2_standard_20201202
-         -n, --dry_run         Dry run only
-         -o OUTDIR, --outdir OUTDIR
-                               Output directory. Default: /home/cfos/Programs/COVID_I
-                               llumina_Snakemake/results/2021-10-27
-         -p, --print_dag       Save directed acyclic graph (DAG) of workflow
-         -r REFERENCE, --reference REFERENCE
-                               Reference genome to use (Default:
-                               /home/cfos/miniconda3/envs/CIS/lib/python3.9/site-
-                               packages/CIS/bin/NC_045512.fasta)
-         -s SCHEME, --scheme SCHEME
-                               Primer scheme to use: built-in opts are 'midnight',
-                               'swift', 'eden', but if using your own scheme provide
-                               the full path to the bed file here (Default: midnight)
-         -t <int>, --threads <int>
-                               Number of threads to use
-         -v VARIANT_CALLER, --variant_caller VARIANT_CALLER
-                               Variant caller to use. Choices: 'lofreq' or 'ivar'
-                               Default: 'lofreq'
-         --keep_reads          Keep trimmed reads
-         --version             show program's version number and exit
-         --suffix <str>        Suffix used to identify samples from reads. Default:
-                               _L001_R1_001.fastq.gz
-         --max_memory <int>    Maximum memory (in MB) that you would like to provide
-                               to snakemake. Default: 58683MB
-         --verbose             Print junk to screen.
+optional arguments:
+  -h, --help            show this help message and exit
+  -c <int>, --consensus_freq <int>
+                        Variant allele frequency threshold for a variant to be
+                        incorporated into consensus genome. Default: 0.9
+  -i ISOLATES, --isolates ISOLATES
+                        List of isolates to assemble (Default: all isolates in
+                        query_directory)
+  -f, --force           Force overwriting of completed files (Default: files
+                        not overwritten)
+  -k KRAKEN2_DB, --kraken2_db KRAKEN2_DB
+                        kraken2 database. Default: /data/kraken2_kmers/viral
+  -n, --dry_run         Dry run only
+  -o OUTDIR, --outdir OUTDIR
+                        Output directory. Default: /home/vrl/Programs/covid-
+                        illumina-snakemake/results/2021-12-02
+  -p, --print_dag       Save directed acyclic graph (DAG) of workflow
+  -r REFERENCE, --reference REFERENCE
+                        Reference genome to use (Default:
+                        /home/vrl/miniconda3/envs/CIS/lib/python3.9/site-
+                        packages/CIS/bin/NC_045512.fasta)
+  -s SCHEME, --scheme SCHEME
+                        Primer scheme to use: built-in opts are 'midnight',
+                        'swift', 'eden', but if using your own scheme provide
+                        the full path to the bed file here (Default: midnight)
+  -t <int>, --threads <int>
+                        Number of threads to use
+  -v VARIANT_CALLER, --variant_caller VARIANT_CALLER
+                        Variant caller to use. Choices: 'lofreq' or 'ivar'
+                        Default: 'lofreq'
+  --keep_reads          Keep trimmed reads
+  --version             show program's version number and exit
+  --suffix <str>        Suffix used to identify samples from reads. Default:
+                        _L001_R1_001.fastq.gz
+  --max_memory <int>    Maximum memory (in MB) that you would like to provide
+                        to snakemake. Default: 60082MB
+  --verbose             Print junk to screen.
+  --report              Generate report.
 ```
+
+Note the presence of the `--report` option. This option must be run _after_ a normal successful analysis. The same analysis command must be used, but with the addition of `--report`. The result will be an html report created in the results outdir, which contains a summary of the pipeline, as well as run statistics, and links to various plots from the run. The report template will be improved over time to be more useful. 
 
 # What does the pipeline do?
 - [Initial QC: adapter removal, error correction, QC reports](#Initial-QC)

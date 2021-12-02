@@ -8,7 +8,10 @@ dependencies:
   - bwa>=0.7.17
   - mamba
   - fastp
+  - imagemagick
+  - jinja2
   - kraken2
+  - networkx
   - pip
   - python>=3.8
   - qualimap
@@ -30,4 +33,5 @@ dependencies:
   - pip:
     - pandas
     - psutil
+    - pygraphviz
 prefix: /home/cfos/miniconda3/envs/CIS

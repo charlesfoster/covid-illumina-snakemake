@@ -204,7 +204,9 @@ rule collect_main_versions:
         printf "$bcfVer\n" >> {output.software}
         samVer=$(samtools --version | head -n2 | tr "\n" " ")
         printf "$samVer\n" >> {output.software}
+        set +eu
         eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --all-versions >> {output.software}
+        set -eu
         kraken2 --version | head -n1 >> {output.software}
         """
 
