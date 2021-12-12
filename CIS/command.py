@@ -140,7 +140,7 @@ def main(sysargs=sys.argv[1:]):
         action="store",
         required=False,
         default="midnight",
-        help="Primer scheme to use: built-in opts are 'midnight', 'swift', 'eden', but if using your own scheme provide the full path to the bed file here  (Default: {})".format(
+        help="Primer scheme to use: built-in opts are 'midnight', 'swift', 'eden', 'articv4.1', and 'articv3', but if using your own scheme provide the full path to the bed file here  (Default: {})".format(
             "midnight"
         ),
     )
