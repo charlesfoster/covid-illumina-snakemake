@@ -231,8 +231,9 @@ def main(sysargs=sys.argv[1:]):
         scheme = os.path.join(
             thisdir, "bin", "primer_schemes", "{}.bed".format(args.scheme)
         )
-    else:
-        scheme = args.scheme
+    #else:
+    #    scheme = args.scheme
+    print(scheme)
     coverage_script = os.path.join(thisdir, "bin", "scripts", "plot_coverage.R")
     converter_script = os.path.join(
         thisdir, "bin", "scripts", "ivar_variants_to_vcf.py"

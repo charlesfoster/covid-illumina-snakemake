@@ -5,7 +5,12 @@ library(data.table)
 library(ggplot2)
 library(ggpubr)
 library(dplyr)
-
+#args = c('/home/vrl/Programs/covid-illumina-snakemake/results/2021_12_13_artic_v3/SC2W-3/coverage/SC2W-3.coverage.txt',
+    #     'articv3',
+   #      '/home/vrl/Programs/covid-illumina-snakemake/results/2021_12_13_artic_v3/SC2W-3/coverage/SC2W-3.coverage_plots.pdf',
+  #       '/home/vrl/Programs/covid-illumina-snakemake/results/2021_12_13_artic_v3/SC2W-3/coverage/SC2W-3.check_amplicons.pdf',
+ #        'articv3',
+#         'SC2W-3')
 ### main df
 df <- fread(args[1])
 names(df) <- c("Genome", "Site", "Coverage")
@@ -26,14 +31,16 @@ primers <- primers[,1:6]
 names(primers) <- c("Genome", "Start", "End", "Primer", "Num", "Strand")
 primers$Amplicon <- gsub("_R|_F", "", primers$Primer)
 
+primers <- primers %>% filter(!grepl("alt", Primer))
+
 amplicons <- bind_rows(lapply(unique(primers$Amplicon), function(x){
-  start <- primers %>% 
-    filter(Amplicon == x, Strand == "+") %>% 
-    dplyr::select(Start) %>% 
+  start <- primers %>%
+    filter(Amplicon == x, Strand == "+") %>%
+    dplyr::select(Start) %>%
     as.numeric
-  end <- primers %>% 
-    filter(Amplicon == x, Strand == "-") %>% 
-    dplyr::select(End) %>% 
+  end <- primers %>%
+    filter(Amplicon == x, Strand == "-") %>%
+    dplyr::select(End) %>%
     as.numeric
   if(is.na(start) || is.na(end)){
     return(NULL)
@@ -49,7 +56,7 @@ y_max <- (mean(df$Coverage)/10)
 y_min <- 0
 
 pos1 <- -y_max*3
-plot1 <- ggplot(df, aes(x=Site, y=Coverage)) + geom_line() + labs(title = paste0("Coverage plot: ", args[6]), x = "Site in SARS-CoV-2 Genome", y = "Coverage") 
+plot1 <- ggplot(df, aes(x=Site, y=Coverage)) + geom_line() + labs(title = paste0("Coverage plot: ", args[6]), x = "Site in SARS-CoV-2 Genome", y = "Coverage")
 plot1 <- plot1 + annotate("rect", xmin = 0,   xmax = 265, ymin = y_min, ymax = y_max, alpha = .2, fill = "blue")
 plot1 <- plot1 + annotate("rect", xmin = 266,   xmax = 21555, ymin = y_min, ymax = y_max, alpha = .2, fill = "red")
 plot1 <- plot1 + annotate("rect", xmin = 21563, xmax = 25384, ymin = y_min, ymax = y_max, alpha = .2, fill = "blue")
@@ -77,10 +84,10 @@ plot1 <- plot1 + annotate("text", angle=90, hjust =0, x = (29558+29674)/2, y=pos
 plot1 <- plot1 + annotate("text", angle=0, hjust =0, x = (29675+29903)/2, y =-y_max, label = "3' UTR")
 
 # Note: I'm disabling the coverage capped plot. Not useful.
-plot2 <- ggplot(df, aes(x=Site, y=Coverage_Capped)) + 
-  geom_line() + labs(x = "Site in SARS-CoV-2 Genome", y = "Coverage (capped at 50)") 
+plot2 <- ggplot(df, aes(x=Site, y=Coverage_Capped)) +
+  geom_line() + labs(x = "Site in SARS-CoV-2 Genome", y = "Coverage (capped at 50)")
 
-plot3 <- ggplot(amplicons, aes(x=Amplicon, y=Coverage)) + 
+plot3 <- ggplot(amplicons, aes(x=Amplicon, y=Coverage)) +
   geom_bar(stat="identity", color="blue") + labs(title = paste("Mean coverage per amplicon for: ", args[6], " (", gsub(".bed","",args[5]), " protocol)", sep=""), x = "Amplicon", y = "Mean Coverage") +
   coord_flip() + scale_x_discrete(limits = rev(levels(amplicons$Amplicon)))
 
@@ -99,8 +106,8 @@ my_plots <- lapply(a2$Amplicon, function(x){
   df2 <- df %>% filter(Site %in% coords$Start:coords$End)
   if(any(df2$Coverage < 10)){
     #print(x)
-    p <- ggplot(df2, aes(x=Site, y=Coverage)) + 
-      geom_line() + labs(x = "Site in SARS-CoV-2 Genome", y = "Coverage") 
+    p <- ggplot(df2, aes(x=Site, y=Coverage)) +
+      geom_line() + labs(x = "Site in SARS-CoV-2 Genome", y = "Coverage")
     p<- p + ggtitle(x)
     return(p)
   }
@@ -110,23 +117,23 @@ my_plots <- my_plots[which(lapply(my_plots,is.null) == FALSE)]
 
 if(args[5] != "swift.bed"){
   if(length(my_plots) > 0){
-   bad_amplicons <- ggarrange(plotlist=my_plots, 
-                               labels = LETTERS[1:length(my_plots)], 
-                               ncol = 2, nrow = ceiling(length(my_plots)/2), 
+   bad_amplicons <- ggarrange(plotlist=my_plots,
+                               labels = LETTERS[1:length(my_plots)],
+                               ncol = 2, nrow = ceiling(length(my_plots)/2),
                                align = "v")
    ggsave(filename = args[4], plot = bad_amplicons)
   }
 }
 #### EXPLORATORY
-#plot1 <- ggplot(df, aes(x=Site, y=Coverage, fill=cov_range)) + 
+#plot1 <- ggplot(df, aes(x=Site, y=Coverage, fill=cov_range)) +
 #  geom_area() + labs(x = "Site in SARS-CoV-2 Genome", y = "Coverage") +
 #  scale_fill_manual(name = "Coverage", labels = c("<10", "10 to 99", "100 to 999", "1000+"), values = c("#D55E00", "#F0E442", "#009E73", "#56B4E9"))
 #
-#plot2 <- ggplot(df, aes(x=Site, y=Coverage_Capped, fill=cov_range)) + 
+#plot2 <- ggplot(df, aes(x=Site, y=Coverage_Capped, fill=cov_range)) +
 #  geom_area() + labs(x = "Site in SARS-CoV-2 Genome", y = "Coverage (capped at 100)") +
 #  scale_fill_manual(name = "Coverage", labels = c("<10", "10 to 99", "100 to 999", "1000+"), values = c("#D55E00", "#F0E442", "#009E73", "#56B4E9"))
 #
-#plot3 <- ggplot(amplicons, aes(x=Amplicon, y=Coverage)) + 
+#plot3 <- ggplot(amplicons, aes(x=Amplicon, y=Coverage)) +
 #  geom_bar(stat="identity", color="blue") + labs(x = "Amplicon", y = "Mean Coverage") +
 #  coord_flip()
 #
