@@ -197,6 +197,52 @@ rule ivar_variants:
         """
 
 
+#rule lofreq_variants_orig:
+#    input:
+#        bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
+#    output:
+#        new_bam=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam")),
+#        new_bam_index=temp(
+#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam.bai")
+#        ),
+#        tmp_vcf1=temp(
+#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")
+#        ),
+#        tmp_vcf2=temp(
+#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz")
+#        ),
+#        tmp_vcf1_index=temp(
+#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz.tbi")
+#        ),
+#        tmp_vcf2_index=temp(
+#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz.tbi")
+#        ),
+#    message:
+#        "calling variants for {wildcards.sample}"
+#    threads: 8
+#    log:
+#        os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.log"),
+#    params:
+#        vcf_script=VCF_MOD,
+#        prefix="{sample}",
+#        reference=REFERENCE,
+#        depth=10,
+#    wildcard_constraints:
+#        sample="(?!NC)(?!NEG).*",
+#    conda:
+#        "../envs/lofreq.yaml"
+#    resources:
+#        cpus=8,
+#    shell:
+#        """
+#        lofreq indelqual --dindel {input.bam} -f {params.reference} | \
+#        samtools sort -@ {threads} -o {output.new_bam} 2> /dev/null
+#        samtools index {output.new_bam}
+#        lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
+#        -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
+#        bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
+#        """
+
 rule lofreq_variants:
     input:
         bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
@@ -204,6 +250,14 @@ rule lofreq_variants:
         new_bam=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam")),
         new_bam_index=temp(
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam.bai")
+        ),
+        new_bam2=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.bam")),
+        new_bam_index2=temp(
+            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.bam.bai")
+        ),
+        new_bam3=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp3.bam")),
+        new_bam_index3=temp(
+            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp3.bam.bai")
         ),
         tmp_vcf1=temp(
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")
@@ -235,14 +289,17 @@ rule lofreq_variants:
         cpus=8,
     shell:
         """
-        lofreq indelqual --dindel {input.bam} -f {params.reference} | \
+        lofreq viterbi -f {params.reference} {input.bam} | \
         samtools sort -@ {threads} -o {output.new_bam} 2> /dev/null
         samtools index {output.new_bam}
+        lofreq indelqual --dindel {output.new_bam} -f {params.reference} -o {output.new_bam2} 2> /dev/null
+        samtools index {output.new_bam2}
+        lofreq alnqual -b {output.new_bam2} $REF > {output.new_bam3}
+        samtools index {output.new_bam3}
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
-        -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
+        -f {params.reference} -o {output.tmp_vcf1} {output.new_bam3} 2> {log}
         bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
         """
-
 
 rule lofreq_bcftools_setGT:
     input:
@@ -254,6 +311,7 @@ rule lofreq_bcftools_setGT:
     params:
         snv_freq=0.1,
         con_freq=CON_FREQ,
+        indel_freq=INDEL_FREQ,
     message:
         "setting conditional GT for {wildcards.sample}"
     wildcard_constraints:
@@ -266,7 +324,7 @@ rule lofreq_bcftools_setGT:
         bcftools view -f 'PASS,.' -i "INFO/AF >= {params.snv_freq}" -Oz -o {output.vcf_file}
         bcftools index {output.vcf_file}
         bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
-        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.con_freq}' -n . 2>> {log} | \
+        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.indel_freq}' -n . 2>> {log} | \
         bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF >= {params.con_freq}' -n 'c:1/1' 2>> {log}
         bcftools index -f {output.vcf_file}
         """
@@ -287,6 +345,7 @@ rule ivar_bcftools_setGT:
     params:
         snv_freq=0.1,
         con_freq=CON_FREQ,
+        indel_freq=INDEL_FREQ,
     message:
         "setting conditional GT for {wildcards.sample}"
     wildcard_constraints:
@@ -299,12 +358,12 @@ rule ivar_bcftools_setGT:
         tabix -s1 -b2 -e2 {output.variant_types}
         echo '##INFO=<ID=TYPE,Number=.,Type=String,Description="Variant type">' > {output.hdr}
         bcftools annotate -a {output.variant_types} -h {output.hdr} -c CHROM,POS,TYPE -Oz -o {output.tmp_vcf} {output.tmp_vcf}
-        bcftools index {output.tmp_vcf}
+        bcftools index -f {output.tmp_vcf}
         bcftools norm -Ou -a -m - {output.tmp_vcf} 2> {log} | \
-        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= 10" -Oz -o {output.vcf_file} {output.tmp_vcf}
+        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= 10" -Oz -o {output.vcf_file}
         bcftools index {output.vcf_file}
         bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= 10' -n 'c:0/1' 2> {log}| \
-        bcftools +setGT -- -t q -i 'TYPE="indel" && FORMAT/ALT_FREQ < {params.con_freq}' -n . 2>> {log} | \
+        bcftools +setGT -- -t q -i 'TYPE="INDEL" && FORMAT/ALT_FREQ < {params.indel_freq}' -n . 2>> {log} | \
         bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= {params.con_freq} & INFO/DP >= 10' -n 'c:1/1' 2> {log}
         bcftools index -f {output.vcf_file}
         """
@@ -332,7 +391,7 @@ rule generate_consensus:
     params:
         prefix="{sample}",
         reference=REFERENCE,
-        freq=CON_FREQ,
+        con_freq=CON_FREQ,
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*",
     resources:

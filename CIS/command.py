@@ -80,10 +80,20 @@ def main(sysargs=sys.argv[1:]):
         "--consensus_freq",
         action="store",
         required=False,
-        help="Variant allele frequency threshold for a variant to be incorporated into consensus genome. Default: {}".format(
+        help="Variant allele frequency threshold for a non-indel variant to be incorporated into consensus genome. Default: {}".format(
             float(0.90)
         ),
-        metavar="<int>",
+        metavar="<float>",
+    )
+    parser.add_argument(
+        "-if",
+        "--indel_freq",
+        action="store",
+        required=False,
+        help="Variant allele frequency threshold for an indel variant to be incorporated into consensus genome. Default: {}".format(
+            float(0.75)
+        ),
+        metavar="<float>",
     )
     parser.add_argument(
         "-i",
@@ -233,7 +243,7 @@ def main(sysargs=sys.argv[1:]):
         )
     #else:
     #    scheme = args.scheme
-    print(scheme)
+    #print(scheme)
     coverage_script = os.path.join(thisdir, "bin", "scripts", "plot_coverage.R")
     converter_script = os.path.join(
         thisdir, "bin", "scripts", "ivar_variants_to_vcf.py"
@@ -295,6 +305,15 @@ def main(sysargs=sys.argv[1:]):
             )
             sys.exit(1)
 
+    indel_freq = 0.75
+    if args.indel_freq:
+        indel_freq = float(args.indel_freq)
+        if indel_freq > 1 or indel_freq < 0:
+            print(
+                "#####\n\033[91mError\033[0m: The indel_freq option must be a float number between 0 and 1\n#####\n"
+            )
+            sys.exit(1)
+
     if not os.path.isfile(args.reference + ".fai"):
         print("Indexing {} with samtools".format(args.reference))
         os.system("samtools faidx {} 2> /dev/null".format(args.reference))
@@ -319,6 +338,7 @@ def main(sysargs=sys.argv[1:]):
         "suffix": suffix,
         "threads": args.threads,
         "consensus_freq": consensus_freq,
+        "indel_freq": indel_freq,
         "keep_reads": args.keep_reads,
         "verbose": args.verbose,
     }

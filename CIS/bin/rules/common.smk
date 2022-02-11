@@ -108,6 +108,7 @@ VARIANT_PROGRAM = os.path.basename(config["variant_program"])
 SCHEME_NAME = os.path.basename(SCHEME)
 KRAKEN2_DB = config["kraken2_db"]
 CON_FREQ = config["consensus_freq"]
+INDEL_FREQ = config["indel_freq"]
 KEEP_READS = config["keep_reads"]
 
 SUFFIX = config["suffix"]
@@ -206,8 +207,8 @@ rule collect_main_versions:
         printf "$samVer\n" >> {output.software}
         set +eu
         eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --all-versions >> {output.software}
-        set -eu
         kraken2 --version | head -n1 >> {output.software}
+        set -eu
         """
 
 
