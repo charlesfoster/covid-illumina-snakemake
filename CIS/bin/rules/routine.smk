@@ -294,7 +294,7 @@ rule lofreq_variants:
         samtools index {output.new_bam}
         lofreq indelqual --dindel {output.new_bam} -f {params.reference} -o {output.new_bam2} 2> /dev/null
         samtools index {output.new_bam2}
-        lofreq alnqual -b {output.new_bam2} $REF > {output.new_bam3}
+        lofreq alnqual -b {output.new_bam2} {params.reference} > {output.new_bam3}
         samtools index {output.new_bam3}
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam3} 2> {log}
