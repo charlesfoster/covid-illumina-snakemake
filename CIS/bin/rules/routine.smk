@@ -434,18 +434,44 @@ rule snpeff:
         snpEff eff -csvStats {params.prefix}.stats.csv -s {params.prefix}.stats.html NC_045512.2 {input.vcf_file} > {output.vcf_file}
         """
 
+rule update_pangolin:
+    output:
+        update_info = os.path.join(RESULT_DIR, "pangolin_update_info.txt"),
+    conda:
+        "../envs/pangolin.yaml"
+    shell:
+        """
+        echo "Attempting to update pangolin..." > {output.update_info}
+        pangolin --update &>> {output.update_info} || echo "pangolin couldn't update. Investigate." >> {output.update_info}
+        echo "Pangolin versions after attempted update..." >> {output.update_info}
+        pangolin --all-versions &>> {output.update_info}
+        """
 
 rule pangolin:
     input:
+        update_info = os.path.join(RESULT_DIR, "pangolin_update_info.txt"),
         fasta=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.fa"),
     output:
         report=os.path.join(RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv"),
+    conda:
+        "../envs/pangolin.yaml"
     shell:
         """
-        set +eu
-        eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --outfile {output.report} {input.fasta} &> /dev/null
-        set -eu
+        pangolin --outfile {output.report} {input.fasta} &> /dev/null
         """
+
+
+# rule pangolin-old:
+#     input:
+#         fasta=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.fa"),
+#     output:
+#         report=os.path.join(RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv"),
+#     shell:
+#         """
+#         set +eu
+#         eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --outfile {output.report} {input.fasta} &> /dev/null
+#         set -eu
+#         """
 
 
 rule sample_qc:
