@@ -117,6 +117,12 @@ def main(sysargs=sys.argv[1:]):
         help="kraken2 database. Default: {}".format(default_kraken),
     )
     parser.add_argument(
+        "-m",
+        "--min_depth",
+        action="store",
+        help="Minimum depth for (1) an SNV to be kept; and (2) consensus genome generation. Default: 10. Default: {}".format(int(10)),
+    )
+    parser.add_argument(
         "-n", "--dry_run", action="store_true", default=False, help="Dry run only"
     )
     parser.add_argument(
@@ -248,9 +254,7 @@ def main(sysargs=sys.argv[1:]):
         scheme = os.path.join(
             thisdir, "bin", "primer_schemes", "{}.bed".format(args.scheme)
         )
-    #else:
-    #    scheme = args.scheme
-    #print(scheme)
+
     coverage_script = os.path.join(thisdir, "bin", "scripts", "plot_coverage.R")
     converter_script = os.path.join(
         thisdir, "bin", "scripts", "ivar_variants_to_vcf.py"
@@ -288,12 +292,6 @@ def main(sysargs=sys.argv[1:]):
         variant_caller = args.variant_caller
     else:
         variant_caller = "lofreq"
-    # variant_caller = shutil.which(variant_caller)
-
-    # ivar is still necessary for trimming
-    # if shutil.which('ivar') is None:
-    #    print('#####\n\033[91mError\033[0m: "ivar" is necessary for amplicon trimming but is not in your path\n#####\n')
-    #    sys.exit(1)
 
     if variant_caller is None:
         print(
@@ -321,6 +319,15 @@ def main(sysargs=sys.argv[1:]):
             )
             sys.exit(1)
 
+    min_depth = 10
+    if args.min_depth:
+        min_depth = int(args.min_depth)
+        if min_depth < 1:
+            print(
+                "#####\n\033[91mError\033[0m: The min_depth option must be an integer >=1\n#####\n"
+            )
+            sys.exit(1)
+
     if not os.path.isfile(args.reference + ".fai"):
         print("Indexing {} with samtools".format(args.reference))
         os.system("samtools faidx {} 2> /dev/null".format(args.reference))
@@ -345,6 +352,7 @@ def main(sysargs=sys.argv[1:]):
         "suffix": suffix,
         "threads": args.threads,
         "consensus_freq": consensus_freq,
+        "min_depth": min_depth,
         "indel_freq": indel_freq,
         "keep_reads": args.keep_reads,
         "verbose": args.verbose,
