@@ -8,7 +8,7 @@ Created on Fri Nov 12 12:59:25 2021
 ########################
 # Clinical sample workflow
 ########################
-
+import re
 
 rule bwa_map_sort:
     input:
@@ -312,6 +312,7 @@ rule lofreq_bcftools_setGT:
         snv_freq=0.1,
         con_freq=CON_FREQ,
         indel_freq=INDEL_FREQ,
+        min_depth=config['min_depth'],
     message:
         "setting conditional GT for {wildcards.sample}"
     wildcard_constraints:
@@ -321,7 +322,7 @@ rule lofreq_bcftools_setGT:
         bcftools index {input.vcf_file}
         bcftools +fill-tags {input.vcf_file} -Ou -- -t "TYPE" | \
         bcftools norm -Ou -a -m -  2> /dev/null | \
-        bcftools view -f 'PASS,.' -i "INFO/AF >= {params.snv_freq}" -Oz -o {output.vcf_file}
+        bcftools view -f 'PASS,.' -i "INFO/AF >= {params.snv_freq} & INFO/DP >= {params.min_depth}" -Oz -o {output.vcf_file}
         bcftools index {output.vcf_file}
         bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
         bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.indel_freq}' -n . 2>> {log} | \
@@ -346,6 +347,7 @@ rule ivar_bcftools_setGT:
         snv_freq=0.1,
         con_freq=CON_FREQ,
         indel_freq=INDEL_FREQ,
+        min_depth=config['min_depth'],
     message:
         "setting conditional GT for {wildcards.sample}"
     wildcard_constraints:
@@ -360,11 +362,11 @@ rule ivar_bcftools_setGT:
         bcftools annotate -a {output.variant_types} -h {output.hdr} -c CHROM,POS,TYPE -Oz -o {output.tmp_vcf} {output.tmp_vcf}
         bcftools index -f {output.tmp_vcf}
         bcftools norm -Ou -a -m - {output.tmp_vcf} 2> {log} | \
-        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= 10" -Oz -o {output.vcf_file}
+        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= {params.min_depth}" -Oz -o {output.vcf_file}
         bcftools index {output.vcf_file}
-        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= 10' -n 'c:0/1' 2> {log}| \
+        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= {params.min_depth}' -n 'c:0/1' 2> {log}| \
         bcftools +setGT -- -t q -i 'TYPE="INDEL" && FORMAT/ALT_FREQ < {params.indel_freq}' -n . 2>> {log} | \
-        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= {params.con_freq} & INFO/DP >= 10' -n 'c:1/1' 2> {log}
+        bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= {params.con_freq} & INFO/DP >= {params.min_depth}' -n 'c:1/1' 2> {log}
         bcftools index -f {output.vcf_file}
         """
 
@@ -392,6 +394,7 @@ rule generate_consensus:
         prefix="{sample}",
         reference=REFERENCE,
         con_freq=CON_FREQ,
+        min_depth=config['min_depth'],
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*",
     resources:
@@ -407,9 +410,9 @@ rule generate_consensus:
             touch {output.mask}
             touch {output.variants_bed}
         else
-            bedtools genomecov -bga -ibam {input.bam} | awk '$4 < 10' | \
+            bedtools genomecov -bga -ibam {input.bam} | awk '$4 < {params.min_depth}' | \
             bedtools subtract -a - -b {output.variants_bed} > {output.mask}
-            bcftools consensus -p {params.prefix} -f {params.reference} --mark-del '-' -m {output.mask} -H I -i 'INFO/DP >= 10 & GT!="mis"' {input.vcf_file} 2> {log} | \
+            bcftools consensus -p {params.prefix} -f {params.reference} --mark-del '-' -m {output.mask} -H I -i 'INFO/DP >= {params.min_depth} & GT!="mis"' {input.vcf_file} 2> {log} | \
             sed "/^>/s/{params.prefix}.*/{params.prefix}/" > {output.consensus}
         fi
         """
@@ -463,7 +466,23 @@ rule sample_qc:
     run:
         lineages = pd.read_csv(input.lineages)
         lineages.loc[0, "taxon"] = params.sample
-        qc = pd.read_csv(input.bamqc, sep="\n")
+
+        with open(input.bamqc,'r') as f:
+            parsed = [x.strip() for x in f.readlines()]
+        
+        parsed = [x for x in parsed  if x != '']
+        
+        for line in parsed:
+            if 'number of reads' in line:
+                No_reads = int(re.sub('^.*= ', '',line).replace(",",""))
+            if 'number of mapped bases' in line:
+                No_bases = int(re.sub('^.*= | bp', '',line).replace(",",""))
+            if 'coverageData >= 10X' in line:
+                ref = str(re.sub('There is a | of reference .*', '',line).replace(",",""))
+            
+        mean_cov = float(parsed[-1].split()[3])
+        std = float(parsed[-1].split()[4])
+
         df = pd.DataFrame(
             columns=[
                 "ID",
@@ -478,27 +497,6 @@ rule sample_qc:
             ]
         )
 
-        ref = (
-            qc[qc["BamQC report"].str.contains("coverageData >= 10X")]
-            .iloc[0, 0]
-            .split()[3]
-        )
-        No_reads = int(
-            qc[qc["BamQC report"].str.contains("number of reads")]
-            .iloc[0]
-            .tolist()[0]
-            .split()[-1]
-            .replace(",", "")
-        )
-        No_bases = int(
-            qc[qc["BamQC report"].str.contains("number of mapped bases")]
-            .iloc[0]
-            .tolist()[0]
-            .split()[-2]
-            .replace(",", "")
-        )
-        mean_cov = int(float(qc.tail(n=1).iloc[0][0].split()[3]))
-        std = int(float(qc.tail(n=1).iloc[0][0].split()[4]))
         lineage = lineages.loc[0, "lineage"]
         scorpio_call = lineages.loc[0, "scorpio_call"]
         if int(float(ref.split("%")[0])) > 79:
