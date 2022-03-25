@@ -294,7 +294,7 @@ rule lofreq_variants:
         samtools index {output.new_bam}
         lofreq indelqual --dindel {output.new_bam} -f {params.reference} -o {output.new_bam2} 2> /dev/null
         samtools index {output.new_bam2}
-        lofreq alnqual -b {output.new_bam2} $REF > {output.new_bam3}
+        lofreq alnqual -b {output.new_bam2} {params.reference} > {output.new_bam3}
         samtools index {output.new_bam3}
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam3} 2> {log}
@@ -458,6 +458,7 @@ rule sample_qc:
         report=temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv")),
     params:
         sample="{sample}",
+        technology=TECHNOLOGY
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*",
     run:
@@ -475,6 +476,7 @@ rule sample_qc:
                 "pangolin lineage",
                 "scorpio_call",
                 "QC",
+                "technology",
             ]
         )
 
@@ -512,7 +514,8 @@ rule sample_qc:
                 lineage,
                 scorpio_call,
                 "PASS",
-            ]
+                params.technology,
+           ]
         else:
             df.loc[0] = [
                 params.sample,
@@ -524,6 +527,7 @@ rule sample_qc:
                 lineage,
                 scorpio_call,
                 "FAIL",
+                params.technology,
             ]
         df.to_csv(output.report, header=True, index=False)
 
@@ -576,6 +580,7 @@ rule neg_qc:
     params:
         today=TODAY,
         sample="{sample}",
+        technology=TECHNOLOGY,
     wildcard_constraints:
         sample="(NC|NEG).*",
     run:
@@ -590,6 +595,7 @@ rule neg_qc:
                 "pangolin lineage",
                 "scorpio_call",
                 "QC",
+                "technology",
             ]
         )
         try:
@@ -605,6 +611,7 @@ rule neg_qc:
                     "-",
                     "-",
                     "FAIL",
+                    params.technology,
                 ]
             else:
                 df.loc[0] = [
@@ -617,7 +624,8 @@ rule neg_qc:
                     "-",
                     "-",
                     "PASS",
+                    params.technology,
                 ]
         except:
-            df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS"]
+            df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS","Illumina Miseq"]
         df.to_csv(output.report, header=True, index=False)
