@@ -178,6 +178,13 @@ def main(sysargs=sys.argv[1:]):
         version=f"covid illumina pipeline snakemake edition:  {__version__}",
     )
     parser.add_argument(
+        "--technology",
+        action="store",
+        help="Sequencing technology (Default: 'Illumina Miseq')",
+        default='Illumina Miseq',
+        metavar="<str>",
+    )
+    parser.add_argument(
         "--suffix",
         action="store",
         help="Suffix used to identify samples from reads. Default: {}".format(
@@ -341,6 +348,7 @@ def main(sysargs=sys.argv[1:]):
         "indel_freq": indel_freq,
         "keep_reads": args.keep_reads,
         "verbose": args.verbose,
+        "technology": args.technology,
     }
 
     if args.print_dag:

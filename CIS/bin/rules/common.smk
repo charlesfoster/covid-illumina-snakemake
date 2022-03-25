@@ -96,6 +96,7 @@ def get_fastq(wildcards):
 # Configuration
 ###############
 
+TECHNOLOGY = config["technology"]
 READSDIR = config["reads_dir"]
 RESULT_DIR = config["outdir"]
 REFERENCE = config["reference"]

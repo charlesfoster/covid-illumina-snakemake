@@ -458,6 +458,7 @@ rule sample_qc:
         report=temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv")),
     params:
         sample="{sample}",
+        technology=TECHNOLOGY
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*",
     run:
@@ -475,6 +476,7 @@ rule sample_qc:
                 "pangolin lineage",
                 "scorpio_call",
                 "QC",
+                "technology",
             ]
         )
 
@@ -512,7 +514,8 @@ rule sample_qc:
                 lineage,
                 scorpio_call,
                 "PASS",
-            ]
+                params.technology,
+           ]
         else:
             df.loc[0] = [
                 params.sample,
@@ -524,6 +527,7 @@ rule sample_qc:
                 lineage,
                 scorpio_call,
                 "FAIL",
+                params.technology,
             ]
         df.to_csv(output.report, header=True, index=False)
 
@@ -575,7 +579,8 @@ rule neg_qc:
         report=temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv")),
     params:
         today=TODAY,
-        sample="{sample}",
+        sample="{sample}",,
+        technology=TECHNOLOGY,
     wildcard_constraints:
         sample="(NC|NEG).*",
     run:
@@ -590,6 +595,7 @@ rule neg_qc:
                 "pangolin lineage",
                 "scorpio_call",
                 "QC",
+                "technology",
             ]
         )
         try:
@@ -605,6 +611,7 @@ rule neg_qc:
                     "-",
                     "-",
                     "FAIL",
+                    params.technology,
                 ]
             else:
                 df.loc[0] = [
@@ -617,7 +624,8 @@ rule neg_qc:
                     "-",
                     "-",
                     "PASS",
+                    params.technology,
                 ]
         except:
-            df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS"]
+            df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS","Illumina Miseq"]
         df.to_csv(output.report, header=True, index=False)
