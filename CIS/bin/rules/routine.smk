@@ -579,7 +579,7 @@ rule neg_qc:
         report=temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv")),
     params:
         today=TODAY,
-        sample="{sample}",,
+        sample="{sample}",
         technology=TECHNOLOGY,
     wildcard_constraints:
         sample="(NC|NEG).*",
