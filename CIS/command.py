@@ -347,6 +347,7 @@ def main(sysargs=sys.argv[1:]):
         "variant_program": variant_caller,
         "scheme": scheme,
         "isolates": isolates,
+        "legacy_results": args.legacy,
         "suffix": suffix,
         "threads": args.threads,
         "consensus_freq": consensus_freq,
@@ -354,7 +355,6 @@ def main(sysargs=sys.argv[1:]):
         "indel_freq": indel_freq,
         "keep_reads": args.keep_reads,
         "verbose": args.verbose,
-        "legacy_results": args.legacy,
     }
 
     if args.print_dag:
