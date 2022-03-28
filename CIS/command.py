@@ -120,7 +120,7 @@ def main(sysargs=sys.argv[1:]):
         "-m",
         "--min_depth",
         action="store",
-        help="Minimum depth for (1) an SNV to be kept; and (2) consensus genome generation. Default: 10. Default: {}".format(int(10)),
+        help="Minimum depth for (1) an SNV to be kept; and (2) consensus genome generation. Default: {}".format(int(10)),
     )
     parser.add_argument(
         "-n", "--dry_run", action="store_true", default=False, help="Dry run only"
@@ -174,6 +174,11 @@ def main(sysargs=sys.argv[1:]):
         action="store",
         help="Variant caller to use. Choices: 'lofreq' or 'ivar' Default: 'lofreq'",
         default="lofreq",
+    )
+    parser.add_argument(
+        "--legacy",
+        action="store_true",
+        help="Output the quality control column names in 'legacy' format. Default: {}".format(False),
     )
     parser.add_argument(
         "--keep_reads", action="store_true", help="Keep trimmed reads", default=False
@@ -327,7 +332,7 @@ def main(sysargs=sys.argv[1:]):
                 "#####\n\033[91mError\033[0m: The min_depth option must be an integer >=1\n#####\n"
             )
             sys.exit(1)
-
+        
     if not os.path.isfile(args.reference + ".fai"):
         print("Indexing {} with samtools".format(args.reference))
         os.system("samtools faidx {} 2> /dev/null".format(args.reference))
@@ -349,6 +354,7 @@ def main(sysargs=sys.argv[1:]):
         "variant_program": variant_caller,
         "scheme": scheme,
         "isolates": isolates,
+        "legacy_results": args.legacy,
         "suffix": suffix,
         "threads": args.threads,
         "consensus_freq": consensus_freq,
