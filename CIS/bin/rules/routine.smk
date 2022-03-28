@@ -749,7 +749,6 @@ rule neg_qc:
                         "-",
                         "-",
                         "-",
-                        "-",
                     ]
                 else:
                     df.loc[0] = [
@@ -771,9 +770,8 @@ rule neg_qc:
                         "-",
                         "-",
                         "-",
-                        "-",
                     ]
             except:
-                df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS", params.today, params.technology, "-", "-", "-", "-", "-", "-", "-", "-"]
+                df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS", params.today, params.technology, "-", "-", "-", "-",  "-", "-", "-"]
 
         df.to_csv(output.report, header=True, index=False)
