@@ -574,7 +574,21 @@ rule sample_qc:
 
         # change column order
         compulsory = ["id","num_reads","num_bases","coverage","mean_depth","stdev_depth","lineage","scorpio_call","QC"]
-        extra = list(set(df.columns) - set(compulsory))
+        #extra = list(set(df.columns) - set(compulsory))
+        extra = [
+            "technology",
+            "analysis_date",
+            "lineage",
+            "pangolin_ambiguity_score",
+            "scorpio_call",
+            "scorpio_support",
+            "lineage_designation_version",
+            "pangolin_version",
+            "pangoLEARN_version",
+            "pango_version",
+            "pangolin_status",
+            "pangolin_note",
+        ]
         final = compulsory+extra
         if not params.legacy:
             df = df.loc[:, final]
