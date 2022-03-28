@@ -578,9 +578,7 @@ rule sample_qc:
         extra = [
             "technology",
             "analysis_date",
-            "lineage",
             "pangolin_ambiguity_score",
-            "scorpio_call",
             "scorpio_support",
             "lineage_designation_version",
             "pangolin_version",
@@ -592,6 +590,7 @@ rule sample_qc:
         final = compulsory+extra
         if not params.legacy:
             df = df.loc[:, final]
+            df['neg_control'] = False
         else:
             df = df.loc[:, compulsory]
             df.columns = [
@@ -725,6 +724,8 @@ rule neg_qc:
                     'pangolin_ambiguity_score',
                     'pangolin_status',
                     'lineage_designation_version',
+                    "pangolin_note",
+                    "neg_control",
                 ]
             )
             try:
@@ -749,6 +750,8 @@ rule neg_qc:
                         "-",
                         "-",
                         "-",
+                        "-",
+                        True,
                     ]
                 else:
                     df.loc[0] = [
@@ -770,8 +773,10 @@ rule neg_qc:
                         "-",
                         "-",
                         "-",
+                        "-",
+                        True,
                     ]
             except:
-                df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS", params.today, params.technology, "-", "-", "-", "-",  "-", "-", "-"]
+                df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS", params.today, params.technology, "-", "-", "-", "-",  "-", "-", "-","-",True]
 
         df.to_csv(output.report, header=True, index=False)
