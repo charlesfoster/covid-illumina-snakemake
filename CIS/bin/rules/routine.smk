@@ -9,6 +9,8 @@ Created on Fri Nov 12 12:59:25 2021
 # Clinical sample workflow
 ########################
 import re
+from datetime  import date
+TODAY = date.today().strftime("%Y-%m-%d")
 
 rule bwa_map_sort:
     input:
@@ -461,11 +463,11 @@ rule sample_qc:
         report=temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv")),
     params:
         sample="{sample}",
+        legacy=config['legacy_results'],
+        date=TODAY,
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*",
     run:
-        lineages = pd.read_csv(input.lineages)
-        lineages.loc[0, "taxon"] = params.sample
 
         with open(input.bamqc,'r') as f:
             parsed = [x.strip() for x in f.readlines()]
@@ -478,27 +480,24 @@ rule sample_qc:
             if 'number of mapped bases' in line:
                 No_bases = int(re.sub('^.*= | bp', '',line).replace(",",""))
             if 'coverageData >= 10X' in line:
-                ref = str(re.sub('There is a | of reference .*', '',line).replace(",",""))
+                ref = str(re.sub('There is a |% of reference .*', '',line).replace(",",""))
             
         mean_cov = float(parsed[-1].split()[3])
         std = float(parsed[-1].split()[4])
-
+        
         df = pd.DataFrame(
             columns=[
-                "ID",
-                "NoReads",
-                "NoBases",
-                "%Ref",
-                "Mean Cov",
-                "std",
-                "pangolin lineage",
-                "scorpio_call",
+                "id",
+                "num_reads",
+                "num_bases",
+                "coverage",
+                "mean_depth",
+                "stdev_depth",
                 "QC",
+                "analysis_date",
             ]
         )
-
-        lineage = lineages.loc[0, "lineage"]
-        scorpio_call = lineages.loc[0, "scorpio_call"]
+        
         if int(float(ref.split("%")[0])) > 79:
             df.loc[0] = [
                 params.sample,
@@ -507,9 +506,8 @@ rule sample_qc:
                 ref,
                 mean_cov,
                 std,
-                lineage,
-                scorpio_call,
                 "PASS",
+                params.date,
             ]
         else:
             df.loc[0] = [
@@ -519,10 +517,51 @@ rule sample_qc:
                 ref,
                 mean_cov,
                 std,
-                lineage,
-                scorpio_call,
                 "FAIL",
+                params.date,
             ]
+        
+        #get pangolin info
+        lineages = pd.read_csv(input.lineages).drop(
+                ["conflict", "scorpio_conflict"], axis=1
+            )
+        
+        lineages.columns = [
+            "id",
+            "lineage",
+            "pangolin_ambiguity_score",
+            "scorpio_call",
+            "scorpio_support",
+            "lineage_designation_version",
+            "pangolin_version",
+            "pangoLEARN_version",
+            "pango_version",
+            "pangolin_status",
+            "pangolin_note",
+        ]
+        
+        df = df.join(lineages.set_index(["id"]), on=["id"])
+        
+        # change column order
+        compulsory = ["id","num_reads","num_bases","coverage","mean_depth","stdev_depth","lineage","scorpio_call","QC"]
+        extra = list(set(df.columns) - set(compulsory))
+        final = compulsory+extra
+        if not params.legacy:
+            df = df.loc[:, final]
+        else:
+            df = df.loc[:, compulsory]
+            df.columns = [
+                    "ID",
+                    "NoReads",
+                    "NoBases",
+                    "%Ref",
+                    "Mean Cov",
+                    "std",
+                    "pangolin lineage",
+                    "scorpio_call",
+                    "QC",
+                ]
+            
         df.to_csv(output.report, header=True, index=False)
 
 
@@ -574,48 +613,119 @@ rule neg_qc:
     params:
         today=TODAY,
         sample="{sample}",
+        legacy=config["legacy_results"],
     wildcard_constraints:
         sample="(NC|NEG).*",
     run:
-        df = pd.DataFrame(
-            columns=[
-                "ID",
-                "NoReads",
-                "NoBases",
-                "%Ref",
-                "Mean Cov",
-                "std",
-                "pangolin lineage",
-                "scorpio_call",
-                "QC",
-            ]
-        )
-        try:
-            neg = pd.read_csv(input.kraken, sep="\t", header=None)
-            if sum(neg[3]) > 10000:
-                df.loc[0] = [
-                    params.sample,
-                    neg.shape[0],
-                    sum(neg[3]),
-                    "-",
-                    "-",
-                    "-",
-                    "-",
-                    "-",
-                    "FAIL",
+        if params.legacy:
+            df = pd.DataFrame(
+                columns=[
+                    "ID",
+                    "NoReads",
+                    "NoBases",
+                    "%Ref",
+                    "Mean Cov",
+                    "std",
+                    "pangolin lineage",
+                    "scorpio_call",
+                    "QC",
                 ]
-            else:
-                df.loc[0] = [
-                    params.sample,
-                    neg.shape[0],
-                    sum(neg[3]),
-                    "-",
-                    "-",
-                    "-",
-                    "-",
-                    "-",
-                    "PASS",
+            )
+            try:
+                neg = pd.read_csv(input.kraken, sep="\t", header=None)
+                if sum(neg[3]) > 10000:
+                    df.loc[0] = [
+                        params.sample,
+                        neg.shape[0],
+                        sum(neg[3]),
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "FAIL",
+                    ]
+                else:
+                    df.loc[0] = [
+                        params.sample,
+                        neg.shape[0],
+                        sum(neg[3]),
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "PASS",
+                    ]
+            except:
+                df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS"]
+        else:
+            df = pd.DataFrame(
+                columns=[
+                    'id', 
+                    'num_reads', 
+                    'num_bases', 
+                    'coverage', 
+                    'mean_depth', 
+                    'stdev_depth',
+                    'lineage', 
+                    'scorpio_call', 
+                    'QC', 
+                    'analysis_date', 
+                    'pangoLEARN_version',
+                    'pango_version', 
+                    'pangolin_version', 
+                    'scorpio_support',
+                    'pangolin_ambiguity_score', 
+                    'pangolin_status',
+                    'lineage_designation_version',
                 ]
-        except:
-            df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS"]
+            )
+            try:
+                neg = pd.read_csv(input.kraken, sep="\t", header=None)
+                if sum(neg[3]) > 10000:
+                    df.loc[0] = [
+                        params.sample,
+                        neg.shape[0],
+                        sum(neg[3]),
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "FAIL",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                    ]
+                else:
+                    df.loc[0] = [
+                        params.sample,
+                        neg.shape[0],
+                        sum(neg[3]),
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "PASS",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                        "-",
+                    ]
+            except:
+                df.loc[0] = [params.sample, "No_reads", 0, "-", "-", "-", "-", "-", "PASS", "-", "-", "-", "-", "-", "-", "-", "-", "-"]
+
         df.to_csv(output.report, header=True, index=False)
