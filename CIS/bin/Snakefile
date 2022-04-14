@@ -56,6 +56,17 @@ if config["workflow"] == "routine":
         message:
             "Pipeline complete!"
         run:
+            fa_files = [f for f in glob.glob(RESULT_DIR + "/**/*.consensus.fa", recursive=True) if (s in f for s in MAIN_SAMPLES+NEG_SAMPLES)]
+
+            multifasta = os.path.join(
+                RESULT_DIR, TODAY + ".consensus_genomes.fasta"
+            )
+            if os.path.exists(multifasta):
+                os.remove(multifasta)
+
+            for fa in fa_files:
+                os.system("cat {0} >> {1}".format(fa, multifasta))
+
             qc_files = glob.glob(RESULT_DIR + "/*qc_results.csv")
             combined_csv = pd.concat([pd.read_csv(f) for f in qc_files])
             combined_csv.to_csv(

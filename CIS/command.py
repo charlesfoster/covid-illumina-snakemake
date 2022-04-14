@@ -10,11 +10,34 @@ import os
 import snakemake
 import argparse
 import sys
+import re
 import shutil
 import psutil
 from datetime import date
 from psutil import virtual_memory
 from psutil._common import bytes2human
+import textwrap as _textwrap
+
+# Define the wrapping of help text: https://stackoverflow.com/questions/35917547/python-argparse-rawtexthelpformatter-with-line-wrap
+os.environ['COLUMNS'] = "120"
+class PreserveWhiteSpaceWrapRawTextHelpFormatter(argparse.RawDescriptionHelpFormatter):
+    def __add_whitespace(self, idx, iWSpace, text):
+        if idx is 0:
+            return text
+        return (" " * iWSpace) + text
+
+    def _split_lines(self, text, width):
+        textRows = text.splitlines()
+        for idx,line in enumerate(textRows):
+            search = re.search('\s*[0-9\-]{0,}\.?\s*', line)
+            if line.strip() is "":
+                textRows[idx] = " "
+            elif search:
+                lWSpace = search.end()
+                lines = [self.__add_whitespace(i,lWSpace,x) for i,x in enumerate(_textwrap.wrap(line, width))]
+                textRows[idx] = lines
+
+        return [item for sublist in textRows for item in sublist]
 
 thisdir = os.path.abspath(os.path.dirname(__file__))
 TODAY = date.today().strftime("%Y-%m-%d")
@@ -70,6 +93,7 @@ def main(sysargs=sys.argv[1:]):
     parser = argparse.ArgumentParser(
         description="covid-illumina-snakemake: a pipeline for analysis SARS-CoV-2 samples",
         usage="""CIS [options] <query_directory> """,
+        formatter_class=PreserveWhiteSpaceWrapRawTextHelpFormatter,
     )
 
     parser.add_argument(
@@ -156,7 +180,14 @@ def main(sysargs=sys.argv[1:]):
         action="store",
         required=False,
         default="midnight",
-        help="Primer scheme to use: built-in opts are 'midnight', 'swift', 'eden', 'articv4.1', and 'articv3', but if using your own scheme provide the full path to the bed file here  (Default: {})".format(
+        help="""Primer scheme to use. Built-in opts are:
+         - 'midnight'
+         - 'swift'
+         - 'eden'
+         - 'articv4.1'
+         - 'articv3'
+
+         If using your own scheme provide the full path to the bed file here (Default: {})""".format(
             "midnight"
         ),
     )
@@ -332,7 +363,7 @@ def main(sysargs=sys.argv[1:]):
                 "#####\n\033[91mError\033[0m: The min_depth option must be an integer >=1\n#####\n"
             )
             sys.exit(1)
-        
+
     if not os.path.isfile(args.reference + ".fai"):
         print("Indexing {} with samtools".format(args.reference))
         os.system("samtools faidx {} 2> /dev/null".format(args.reference))
