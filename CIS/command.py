@@ -399,7 +399,7 @@ def main(sysargs=sys.argv[1:]):
     if args.print_dag:
         flat_config = []
         for key in config:
-            flat_config.append(key + "=" + str(config[key]))
+            flat_config.append(key + "=" + '"'+str(config[key])+'"')
         flat_config = " ".join(flat_config)
         cmd = 'snakemake -j1 -s {0}  --config {1} --dag | grep -v "No negative control samples detected" | dot -Tpdf > dag.pdf'.format(
             os.path.join(thisdir, "bin", "Snakefile"), flat_config

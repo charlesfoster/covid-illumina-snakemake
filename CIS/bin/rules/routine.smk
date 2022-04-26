@@ -553,19 +553,19 @@ rule sample_qc:
 
         #get pangolin info
         lineages = pd.read_csv(input.lineages).drop(
-                ["conflict", "scorpio_conflict"], axis=1
+                ["ambiguity_score", "scorpio_conflict", "scorpio_notes", "is_designated", "qc_notes"], axis=1
             )
 
         lineages.columns = [
             "id",
             "lineage",
-            "pangolin_ambiguity_score",
+            "lineage_conflict",
             "scorpio_call",
             "scorpio_support",
             "lineage_designation_version",
             "pangolin_version",
-            "pangoLEARN_version",
-            "pango_version",
+            "scorpio_version",
+            "constellation_version",
             "pangolin_status",
             "pangolin_note",
         ]
@@ -578,15 +578,15 @@ rule sample_qc:
         extra = [
             "technology",
             "analysis_date",
-            "pangolin_ambiguity_score",
             "scorpio_support",
+            "scorpio_version",
+            "lineage_conflict",
             "lineage_designation_version",
             "pangolin_version",
-            "pangoLEARN_version",
-            "pango_version",
             "pangolin_status",
             "pangolin_note",
         ]
+
         final = compulsory+extra
         if not params.legacy:
             df = df.loc[:, final]
