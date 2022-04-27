@@ -465,18 +465,44 @@ rule pangolin:
         pangolin --outfile {output.report} {input.fasta} &> /dev/null
         """
 
+rule update_nextclade:
+    output:
+        update_info = os.path.join(RESULT_DIR, "nextclade_update_info.txt"),
+    params:
+        nextclade_dataset = config['nextclade_dataset']
+    container:
+        "docker://nextstrain/nextclade:latest"
+    shell:
+        """
+        echo "nextclade version:" > {output.update_info}
+        nextclade --version >> {output.update_info} &>/dev/null
+        echo "Updating SARS-CoV-2 dataset..." >> {output.update_info}
+        nextclade dataset get --name sars-cov-2 -o {params.nextclade_dataset} &>>{output.update_info}
+        """
 
-# rule pangolin-old:
-#     input:
-#         fasta=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.fa"),
-#     output:
-#         report=os.path.join(RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv"),
-#     shell:
-#         """
-#         set +eu
-#         eval "$(conda shell.bash hook)" && conda activate pangolin && pangolin --outfile {output.report} {input.fasta} &> /dev/null
-#         set -eu
-#         """
+rule nextclade:
+    input:
+        update_info = os.path.join(RESULT_DIR, "nextclade_update_info.txt"),
+        fasta=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.fa"),
+    output:
+        report=os.path.join(RESULT_DIR, "{sample}/nextclade/{sample}.nextclade_report.tsv"),
+    params:
+        nextclade_dataset = config['nextclade_dataset'],
+        outdir = os.path.join(RESULT_DIR, "{sample}/nextclade"),
+    container:
+        "docker://nextstrain/nextclade:latest"
+    resources:
+        cpus=1,
+    threads: 4,
+    shell:
+        """
+        nextclade run --in-order \
+        --input-fasta={input.fasta} \
+        --input-dataset={params.nextclade_dataset} \
+        --output-dir={params.outdir} \
+        --output-tsv={output.report} \
+        --jobs 4 &> /dev/null
+        """
 
 
 rule sample_qc:
@@ -484,6 +510,9 @@ rule sample_qc:
         bamqc=os.path.join(RESULT_DIR, "{sample}/bamqc/genome_results.txt"),
         lineages=os.path.join(
             RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv"
+        ),
+        nextclade_report=os.path.join(
+            RESULT_DIR, "{sample}/nextclade/{sample}.nextclade_report.tsv"
         ),
     output:
         report=temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv")),
@@ -572,6 +601,14 @@ rule sample_qc:
 
         df = df.join(lineages.set_index(["id"]), on=["id"])
 
+        # read in the nextclade files
+        nextclade = pd.read_csv(input.nextclade_report, sep="\t")
+        nextclade.rename(columns={'seqName':'id','qc.privateMutations.total':'totalPrivateMutations','qc.overallStatus':'Nextclade_QC'}, inplace=True)
+        keep = ['id','clade','Nextclade_pango','Nextclade_QC','totalFrameShifts','totalAminoacidInsertions','totalAminoacidDeletions','totalAminoacidSubstitutions','totalNonACGTNs','totalPrivateMutations']
+        nextclade = nextclade.loc[:,keep]
+
+        df = df.join(nextclade.set_index(["id"]), on=["id"])
+
         # change column order
         compulsory = ["id","num_reads","num_bases","coverage","mean_depth","stdev_depth","lineage","scorpio_call","QC"]
         #extra = list(set(df.columns) - set(compulsory))
@@ -585,6 +622,15 @@ rule sample_qc:
             "pangolin_version",
             "pangolin_status",
             "pangolin_note",
+            "clade",
+            "Nextclade_pango",
+            'Nextclade_QC',
+            'totalFrameShifts',
+            'totalAminoacidInsertions',
+            'totalAminoacidDeletions',
+            'totalAminoacidSubstitutions',
+            'totalNonACGTNs',
+            'totalPrivateMutations',
         ]
 
         final = compulsory+extra

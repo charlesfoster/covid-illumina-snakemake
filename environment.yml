@@ -30,6 +30,7 @@ dependencies:
   - seqmagick
   - snakemake-minimal>=5.13
   - snpEff
+  - singularity==3.7.1
   - pip:
     - pandas
     - psutil

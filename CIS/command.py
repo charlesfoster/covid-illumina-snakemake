@@ -375,6 +375,8 @@ def main(sysargs=sys.argv[1:]):
 
     config = {
         "reads_dir": os.path.join(os.getcwd(), args.query_directory[0]),
+        "nextclade_dataset": os.path.join(thisdir, "nextclade_datasets","sars-cov-2"),
+        "singularity_args": f'--bind {outdir}:{outdir},{os.environ["CONDA_PREFIX"]}:{os.environ["CONDA_PREFIX"]}',
         "kraken2_db": default_kraken,
         "outdir": outdir,
         "reference": args.reference,
@@ -411,6 +413,8 @@ def main(sysargs=sys.argv[1:]):
             snakefile,
             report=os.path.join(outdir, "pipeline_report.html"),
             use_conda=True,
+            use_singularity=True,
+            singularity_args=config['singularity_args'],
             conda_frontend="mamba",
             dryrun=args.dry_run,
             printshellcmds=True,
@@ -430,6 +434,8 @@ def main(sysargs=sys.argv[1:]):
         status = snakemake.snakemake(
             snakefile,
             use_conda=True,
+            use_singularity=True,
+            singularity_args=config['singularity_args'],
             conda_frontend="mamba",
             dryrun=args.dry_run,
             printshellcmds=True,
