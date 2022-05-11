@@ -16,7 +16,7 @@ dependencies:
   - python>=3.8
   - qualimap
   - r-base==4.1
-  - r-rlang>=1.02
+  - r-rlang>=1.0.2
   - r-ggplot2
   - r-seqinr
   - r-stringr
