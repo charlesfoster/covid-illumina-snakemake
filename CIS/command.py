@@ -212,6 +212,11 @@ def main(sysargs=sys.argv[1:]):
         help="Output the quality control column names in 'legacy' format. Default: {}".format(False),
     )
     parser.add_argument(
+        "--no_singularity",
+        action="store_true",
+        help="Stop the use of singularity. Default: {}".format(False),
+    )
+    parser.add_argument(
         "--keep_reads", action="store_true", help="Keep trimmed reads", default=False
     )
     parser.add_argument(
@@ -371,6 +376,11 @@ def main(sysargs=sys.argv[1:]):
         print("Indexing {} with bwa".format(args.reference))
         os.system("bwa index {} 2> /dev/null".format(args.reference))
 
+    if args.no_singularity:
+        use_singularity = False
+    else:
+        use_singularity = True
+
     snakefile = os.path.join(thisdir, "bin", "Snakefile")
 
     config = {
@@ -413,7 +423,7 @@ def main(sysargs=sys.argv[1:]):
             snakefile,
             report=os.path.join(outdir, "pipeline_report.html"),
             use_conda=True,
-            use_singularity=True,
+            use_singularity=use_singularity,
             singularity_args=config['singularity_args'],
             conda_frontend="mamba",
             dryrun=args.dry_run,
@@ -434,7 +444,7 @@ def main(sysargs=sys.argv[1:]):
         status = snakemake.snakemake(
             snakefile,
             use_conda=True,
-            use_singularity=True,
+            use_singularity=use_singularity,
             singularity_args=config['singularity_args'],
             conda_frontend="mamba",
             dryrun=args.dry_run,

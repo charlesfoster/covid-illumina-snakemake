@@ -462,7 +462,7 @@ rule pangolin:
         "../envs/pangolin.yaml"
     shell:
         """
-        pangolin --outfile {output.report} {input.fasta} &> /dev/null
+        pangolin --outfile {output.report} --skip-scorpio {input.fasta} &> /dev/null
         """
 
 rule update_nextclade:
@@ -472,6 +472,8 @@ rule update_nextclade:
         nextclade_dataset = config['nextclade_dataset']
     container:
         "docker://nextstrain/nextclade:latest"
+    conda:
+        "../envs/nextstrain.yaml"
     shell:
         """
         echo "nextclade version:" > {output.update_info}
@@ -491,6 +493,8 @@ rule nextclade:
         outdir = os.path.join(RESULT_DIR, "{sample}/nextclade"),
     container:
         "docker://nextstrain/nextclade:latest"
+    conda:
+        "../envs/nextstrain.yaml"
     resources:
         cpus=1,
     threads: 4,
