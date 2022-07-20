@@ -471,9 +471,7 @@ rule update_nextclade:
     params:
         nextclade_dataset = config['nextclade_dataset']
     container:
-        "docker://nextstrain/nextclade:latest"
-    conda:
-        "../envs/nextstrain.yaml"
+        "docker://nextstrain/nextclade:2.3.0"
     shell:
         """
         echo "nextclade version:" > {output.update_info}
@@ -491,22 +489,16 @@ rule nextclade:
     params:
         nextclade_dataset = config['nextclade_dataset'],
         outdir = os.path.join(RESULT_DIR, "{sample}/nextclade"),
+    log:
+        os.path.join(RESULT_DIR, "{sample}/nextclade/{sample}.nextclade.log"),
     container:
-        "docker://nextstrain/nextclade:latest"
-    conda:
-        "../envs/nextstrain.yaml"
+        "docker://nextstrain/nextclade:2.3.0",
     resources:
         cpus=1,
     threads: 4,
     shell:
         """
-        nextclade run --in-order \
-        --input-dataset={params.nextclade_dataset} \
-        --output-basename={wildcards.sample} \
-        --output-all={params.outdir} \
-        --output-tsv={output.report} \
-        --jobs 4 \
-        {input.fasta} &> {log}
+        nextclade run --in-order --input-dataset={params.nextclade_dataset} --output-basename={wildcards.sample} --output-all={params.outdir} --output-tsv={output.report} --jobs {threads} {input.fasta} &> {log}
         """
 
 
