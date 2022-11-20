@@ -9,8 +9,13 @@ Created on Fri Nov 12 12:59:25 2021
 # Clinical sample workflow
 ########################
 import re
+import pathlib
 from datetime  import date
-TODAY = date.today().strftime("%Y-%m-%d")
+
+if config['use_date']:
+    TODAY = date.today().strftime("%Y-%m-%d")
+else:
+    TODAY = pathlib.PurePath(config['reads_dir']).name
 
 rule bwa_map_sort:
     input:
@@ -471,7 +476,7 @@ rule update_nextclade:
     params:
         nextclade_dataset = config['nextclade_dataset']
     container:
-        "docker://nextstrain/nextclade:latest"
+        "docker://nextstrain/nextclade:2.8.0"
     shell:
         """
         echo "nextclade version:" > {output.update_info}
@@ -488,20 +493,19 @@ rule nextclade:
         report=os.path.join(RESULT_DIR, "{sample}/nextclade/{sample}.nextclade_report.tsv"),
     params:
         nextclade_dataset = config['nextclade_dataset'],
-        outdir = os.path.join(RESULT_DIR, "{sample}/nextclade"),
     container:
-        "docker://nextstrain/nextclade:latest"
+        "docker://nextstrain/nextclade:2.8.0"
     resources:
         cpus=1,
     threads: 4,
+    log:
+        os.path.join(RESULT_DIR, "{sample}/nextclade","{sample}_nextstrain.log"),
     shell:
         """
-        nextclade run --in-order \
-        --input-fasta={input.fasta} \
+        nextclade run \
         --input-dataset={params.nextclade_dataset} \
-        --output-dir={params.outdir} \
         --output-tsv={output.report} \
-        --jobs 4 &> /dev/null
+        --jobs 4 {input.fasta} &> {log}
         """
 
 
@@ -520,7 +524,7 @@ rule sample_qc:
         sample="{sample}",
         technology=TECHNOLOGY,
         legacy=config['legacy_results'],
-        date=TODAY,
+        date=date.today().strftime("%Y-%m-%d"),
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*",
     run:
@@ -700,7 +704,7 @@ rule neg_qc:
     output:
         report=temp(os.path.join(RESULT_DIR, "{sample}.qc_results.csv")),
     params:
-        today=TODAY,
+        today=date.today().strftime("%Y-%m-%d"),
         sample="{sample}",
         technology=TECHNOLOGY,
         legacy=config["legacy_results"],

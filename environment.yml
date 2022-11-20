@@ -33,6 +33,7 @@ dependencies:
   - singularity==3.7.1
   - pip:
     - pandas
+    - pango-collapse
     - psutil
     - pygraphviz
 prefix: /home/cfos/miniconda3/envs/CIS

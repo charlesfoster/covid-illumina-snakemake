@@ -11,7 +11,7 @@ import snakemake
 import argparse
 import sys
 import re
-import shutil
+import pathlib
 import psutil
 from datetime import date
 from psutil import virtual_memory
@@ -40,7 +40,6 @@ class PreserveWhiteSpaceWrapRawTextHelpFormatter(argparse.RawDescriptionHelpForm
         return [item for sublist in textRows for item in sublist]
 
 thisdir = os.path.abspath(os.path.dirname(__file__))
-TODAY = date.today().strftime("%Y-%m-%d")
 
 
 def bytesto(bytes, to, bsize=1024):
@@ -153,8 +152,8 @@ def main(sysargs=sys.argv[1:]):
         "-o",
         "--outdir",
         action="store",
-        help="Output directory. Default: {}".format(
-            os.path.join(os.getcwd(), "results", TODAY)
+        help="Explicitly specify output directory rather than the default of '{}'".format(
+            os.path.join(os.getcwd(), "results", '<input_reads_directory_name>')
         ),
     )
     parser.add_argument(
@@ -227,6 +226,12 @@ def main(sysargs=sys.argv[1:]):
         metavar="<str>",
     )
     parser.add_argument(
+        "--use_date",
+        action="store_true",
+        help="Name output directory and files after today's date rather than input reads directory name",
+        default=False,
+    )
+    parser.add_argument(
         "--suffix",
         action="store",
         help="Suffix used to identify samples from reads. Default: {}".format(
@@ -270,10 +275,14 @@ def main(sysargs=sys.argv[1:]):
     elif args.kraken2_db:
         default_kraken = args.kraken2_db
 
+    if args.use_date:
+        results_string = date.today().strftime("%Y-%m-%d")
+    else:
+        results_string = pathlib.PurePath(args.query_directory[0]).name
     if args.outdir:
         outdir = args.outdir
     else:
-        outdir = os.path.join(os.getcwd(), "results", TODAY)
+        outdir = os.path.join(os.getcwd(), "results", results_string)
 
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -396,6 +405,7 @@ def main(sysargs=sys.argv[1:]):
         "keep_reads": args.keep_reads,
         "verbose": args.verbose,
         "technology": args.technology,
+        "use_date": args.use_date,
     }
 
     if args.print_dag:
