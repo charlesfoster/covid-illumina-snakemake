@@ -19,6 +19,7 @@ import yaml
 import subprocess
 import glob
 import pandas as pd
+import pathlib
 
 #################
 # Custom functions
@@ -125,7 +126,6 @@ try:
     NEG_TABLE = find_input_data(READSDIR, "neg", SUFFIX)
     NEG_SAMPLES = NEG_TABLE.index.get_level_values("sample").unique().tolist()
 except:
-    print("\nNo negative control samples detected\n")
     NEG_SAMPLES = []
 INPUT_TABLE = find_input_data(READSDIR, "all", SUFFIX)
 
@@ -151,8 +151,11 @@ if VARIANT_PROGRAM == "lofreq":
 else:
     variant_conda_env = "../envs/ivar.yaml"
 
+if config['use_date']:
+    TODAY = date.today().strftime("%Y-%m-%d")
+else:
+    TODAY = pathlib.PurePath(config['reads_dir']).name
 
-TODAY = date.today().strftime("%Y-%m-%d")
 
 ################
 # Optional removal of trimmed reads (to save space)
@@ -164,6 +167,9 @@ if KEEP_READS == False:
         dead_reads = glob.glob(RESULT_DIR + "/**/*trimmed*.gz", recursive=True)
         [os.remove(x) for x in dead_reads]
 
+onstart:
+    if NEG_SAMPLES == []:
+        print("\nNo negative control samples detected\n")
 
 ################
 # Software versions
