@@ -6,7 +6,7 @@ channels:
 dependencies:
   - bedtools
   - bwa>=0.7.17
-  - mamba
+#  - mamba
   - fastp
   - imagemagick
   - jinja2

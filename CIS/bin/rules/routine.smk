@@ -476,13 +476,13 @@ rule update_nextclade:
     params:
         nextclade_dataset = config['nextclade_dataset']
     container:
-        "docker://nextstrain/nextclade:2.8.0"
+        "docker://nextstrain/nextclade:2.9.1"
     shell:
         """
-        echo "nextclade version:" > {output.update_info}
-        nextclade --version >> {output.update_info} &>/dev/null
-        echo "Updating SARS-CoV-2 dataset..." >> {output.update_info}
-        nextclade dataset get --name sars-cov-2 -o {params.nextclade_dataset} &>>{output.update_info}
+        echo "nextclade version:" | tee -a {output.update_info}
+        nextclade --version | tee -a {output.update_info} 
+        echo "Updating SARS-CoV-2 dataset..." | tee -a {output.update_info}
+        nextclade dataset get --name sars-cov-2 -o {params.nextclade_dataset} | tee -a {output.update_info}
         """
 
 rule nextclade:
@@ -494,7 +494,7 @@ rule nextclade:
     params:
         nextclade_dataset = config['nextclade_dataset'],
     container:
-        "docker://nextstrain/nextclade:2.8.0"
+        "docker://nextstrain/nextclade:2.9.1"
     resources:
         cpus=1,
     threads: 4,

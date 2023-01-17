@@ -10,6 +10,7 @@ def check_nextclade(thisdir):
     print(
         "Checking whether nextclade needs to be updated..."
     )
+    print(f"Working with: {snakefile}")
     update_file = os.path.join(thisdir, "bin", "scripts", "get_latest_tag.sh")
     cmd = f'grep "docker://nextstrain" {snakefile} | uniq | tr -d " " | sed "s|docker://nextstrain/nextclade:||" | tr -d "\n"'
     current_version = subprocess.check_output(cmd, shell=True).decode('utf-8').replace('"','')
