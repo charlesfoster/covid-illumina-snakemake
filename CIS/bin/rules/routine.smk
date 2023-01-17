@@ -22,7 +22,7 @@ rule bwa_map_sort:
         r1=os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R1.fq.gz"),
         r2=os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R2.fq.gz"),
     output:
-        bam=os.path.join(RESULT_DIR, "{sample}/{sample}.sorted.bam"),
+        bam=temp(os.path.join(RESULT_DIR, "{sample}/{sample}.sorted.bam")),
     message:
         "mapping {wildcards.sample} reads to reference"
     threads: 4
@@ -258,10 +258,10 @@ rule lofreq_variants:
         new_bam_index=temp(
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam.bai")
         ),
-        new_bam2=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.bam")),
-        new_bam_index2=temp(
-            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.bam.bai")
-        ),
+        # new_bam2=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.bam")),
+        # new_bam_index2=temp(
+        #     os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.bam.bai")
+        # ),
         new_bam3=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp3.bam")),
         new_bam_index3=temp(
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp3.bam.bai")
@@ -299,14 +299,14 @@ rule lofreq_variants:
         lofreq viterbi -f {params.reference} {input.bam} | \
         samtools sort -@ {threads} -o {output.new_bam} 2> /dev/null
         samtools index {output.new_bam}
-        lofreq indelqual --dindel {output.new_bam} -f {params.reference} -o {output.new_bam2} 2> /dev/null
-        samtools index {output.new_bam2}
-        lofreq alnqual -b {output.new_bam2} {params.reference} > {output.new_bam3}
+        lofreq indelqual --dindel {output.new_bam} -f {params.reference} -o {output.new_bam3} 2> /dev/null
+        samtools index {output.new_bam3}
         samtools index {output.new_bam3}
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam3} 2> {log}
         bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
         """
+        #lofreq alnqual -b {output.new_bam2} {params.reference} > {output.new_bam3}
 
 rule lofreq_bcftools_setGT:
     input:
