@@ -104,7 +104,7 @@ def main(sysargs=sys.argv[1:]):
         action="store",
         required=False,
         help="Variant allele frequency threshold for a non-indel variant to be incorporated into consensus genome. Default: {}".format(
-            float(0.90)
+            float(0.75)
         ),
         metavar="<float>",
     )
