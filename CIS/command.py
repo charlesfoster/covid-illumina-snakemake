@@ -17,6 +17,7 @@ from datetime import date
 from psutil import virtual_memory
 from psutil._common import bytes2human
 import textwrap as _textwrap
+from CIS.bin.scripts.check_nextclade import check_nextclade
 
 # Define the wrapping of help text: https://stackoverflow.com/questions/35917547/python-argparse-rawtexthelpformatter-with-line-wrap
 os.environ['COLUMNS'] = "120"
@@ -417,6 +418,9 @@ def main(sysargs=sys.argv[1:]):
         "technology": args.technology,
         "use_date": args.use_date,
     }
+
+    # check for nextclade update
+    check_nextclade(thisdir)
 
     if args.print_dag:
         flat_config = []
