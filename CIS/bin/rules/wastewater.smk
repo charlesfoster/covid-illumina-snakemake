@@ -355,23 +355,38 @@ rule freyja_depths:
         samtools mpileup -aa -A -d 600000 -Q 20 -q 0 -B -f  {params.reference}  {input.bam} 2> /dev/null | cut -f1-4 > {output.depths}
         """
 
+rule freyja_update_dataset:
+    output:
+        updated=temp(os.path.join(RESULT_DIR, "freyja.updated.txt")),
+    params:
+        location = config['freyja_dataset']
+    container:
+        "docker://staphb/freyja:1.3.11"
+    shell:
+        """
+        mkdir -p {params.location}
+        freyja update --outdir {params.location} &>/dev/null
+        touch {output.updated}
+        """
+
 
 rule freyja_demix:
     input:
         vcf=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz"),
         depths=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.depths"),
+        updated=os.path.join(RESULT_DIR, "freyja.updated.txt"),
     output:
         demix=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.demix"),
     params:
         vcf=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.vcf"),
         demix=os.path.join(RESULT_DIR, "{sample}/freyja/demixing_result.csv"),
-    conda:
-        "../envs/freyja.yaml"
+        barcodes = os.path.join(config['freyja_dataset'],"usher_barcodes.csv"),
+    container:
+        "docker://staphb/freyja:1.3.11"
     shell:
         """
         gunzip -c {input.vcf} > {params.vcf}
-        freyja demix {input.vcf} {input.depths} &>/dev/null
-        mv {params.demix} {output.demix}
+        freyja demix {params.vcf} {input.depths} --output {output.demix} --barcodes {params.barcodes} &>/dev/null
         """
 
 rule freyja_aggregate_and_plot:
@@ -387,13 +402,14 @@ rule freyja_aggregate_and_plot:
     params:
         agg=os.path.join(RESULT_DIR, "freyja_aggregated","freyja_aggregated.tsv"),
         outdir = os.path.join(RESULT_DIR, "freyja_aggregated"),
-    conda:
-        "../envs/freyja.yaml"
+    container:
+        "docker://staphb/freyja:1.3.11"
     shell:
         """
-        for ff in {input.demix_files}:
-            cp $ff {params.freyja_dir}
-        freyja aggregate --output {params.agg} {params.outdir}/ --ext demix"
+        for ff in {input.demix_files}; do
+            cp $ff {params.outdir}
+        done
+        freyja aggregate --output {params.agg} {params.outdir}/ --ext demix
         rm {params.outdir}/*.demix
 
         # plot freyja results
@@ -489,7 +505,7 @@ rule generate_consensus:
 
 rule amino_acid_consequences:
     input:
-        vcf_file=proper_vcf,
+        vcf=proper_vcf,
     output:
         tsv=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.annotated.tsv"),
     message:
@@ -505,7 +521,7 @@ rule amino_acid_consequences:
     shell:
         """
         printf "reference\tsample_id\tgene\tnt_pos\tref\talt\teffect\taa_bcsq\taa_standard\tvaf\tdepth\n" > {output.tsv}
-        bcftools csq -f {params.reference} -g {params.annotation} --force {input.vcf} 2>{log} | \
+        bcftools csq -f {params.reference} -g {params.annotation} --force -pm {input.vcf} 2>{log} | \
         bcftools query -f'[%CHROM\t%SAMPLE\t%POS\t%REF\t%ALT\t%DP\t%AF\t%TBCSQ\n]' 2>{log} | \
         awk -F'|' -v OFS="\t" '{{ print $1,$2,$6 }}' | \
         awk -v OFS="\t" -F"\t" '

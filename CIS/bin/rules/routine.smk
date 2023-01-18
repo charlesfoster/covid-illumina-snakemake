@@ -426,7 +426,7 @@ rule generate_consensus:
 
 rule amino_acid_consequences:
     input:
-        vcf_file=proper_vcf,
+        vcf=proper_vcf,
     output:
         tsv=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.annotated.tsv"),
     message:
@@ -442,7 +442,7 @@ rule amino_acid_consequences:
     shell:
         """
         printf "reference\tsample_id\tgene\tnt_pos\tref\talt\teffect\taa_bcsq\taa_standard\tvaf\tdepth\n" > {output.tsv}
-        bcftools csq -f {params.reference} -g {params.annotation} --force {input.vcf} 2>{log} | \
+        bcftools csq -f {params.reference} -g {params.annotation} --force -pm {input.vcf} 2>{log} | \
         bcftools query -f'[%CHROM\t%SAMPLE\t%POS\t%REF\t%ALT\t%DP\t%AF\t%TBCSQ\n]' 2>{log} | \
         awk -F'|' -v OFS="\t" '{{ print $1,$2,$6 }}' | \
         awk -v OFS="\t" -F"\t" '

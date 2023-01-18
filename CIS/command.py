@@ -214,11 +214,18 @@ def main(sysargs=sys.argv[1:]):
         default="routine",
     )
     parser.add_argument(
-        "-x",
-        "--skip_update_check",
+        "-xn",
+        "--skip_nextclade_check",
         action="store_true",
         default=False,
         help="Skip check for a Nextclade update",
+    )
+    parser.add_argument(
+        "-xf",
+        "--skip_freyja_check",
+        action="store_true",
+        default=False,
+        help="Skip check for a freyja update (if using wastewater workflow)",
     )
     parser.add_argument(
         "--legacy",
@@ -266,6 +273,12 @@ def main(sysargs=sys.argv[1:]):
             max_mem
         ),
         metavar="<int>",
+    )
+    parser.add_argument(
+        "--redo_demix",
+        action="store_true",
+        help="Redo demixing using freyja ('wastewater' workflow only)",
+        default=False,
     )
     parser.add_argument("--verbose", action="store_true", help="Print junk to screen.")
     parser.add_argument("--report", action="store_true", help="Generate report.")
@@ -442,8 +455,19 @@ def main(sysargs=sys.argv[1:]):
     }
 
     # check for nextclade update
-    if not args.skip_update_check:
-        check_nextclade(thisdir)
+    if not args.skip_nextclade_check:
+        check_nextclade(thisdir,args.workflow)
+
+    # wastewater specific
+    if args.workflow == "wastewater":
+        config["freyja_dataset"] = os.path.join(thisdir, "freyja_dataset")
+        if not args.skip_freyja_check:
+            from CIS.bin.scripts.check_freyja import check_freyja
+            check_freyja(thisdir,args.workflow)
+        if args.redo_demix:
+            demix_files = glob.glob(outdir + "/**/*.demix", recursive=True)
+            [os.remove(f) for f in demix_files]
+
 
     if args.print_dag:
         flat_config = []
@@ -498,6 +522,8 @@ def main(sysargs=sys.argv[1:]):
         status = snakemake.snakemake(
             snakefile,
             use_conda=True,
+            use_singularity=use_singularity,
+            singularity_args=config['singularity_args'],
             conda_frontend="mamba",
             dryrun=args.dry_run,
             printshellcmds=False,

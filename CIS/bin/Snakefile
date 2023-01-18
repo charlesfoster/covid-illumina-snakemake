@@ -117,8 +117,6 @@ if config["workflow"] == "wastewater":
                 caption="report/final_qc.rst",
                 category="Final QC",
             ),
-        conda:
-            "envs/freyja.yaml",
         message:
             "Pipeline complete!"
         run:
