@@ -207,6 +207,13 @@ def main(sysargs=sys.argv[1:]):
         default="lofreq",
     )
     parser.add_argument(
+        "-w",
+        "--workflow",
+        action="store",
+        help="Workflow to use. Choices: 'routine' or 'wastewater' Default: 'routine'",
+        default="routine",
+    )
+    parser.add_argument(
         "--legacy",
         action="store_true",
         help="Output the quality control column names in 'legacy' format. Default: {}".format(False),
@@ -379,6 +386,12 @@ def main(sysargs=sys.argv[1:]):
             )
             sys.exit(1)
 
+    if args.workflow not in ['routine', 'wastewater']:
+        print(
+            "#####\n\033[91mError\033[0m: workflow can only be specified as 'routine' or 'wastewater'\n#####\n"
+        )
+        sys.exit(1)
+
     if not os.path.isfile(args.reference + ".fai"):
         print("Indexing {} with samtools".format(args.reference))
         os.system("samtools faidx {} 2> /dev/null".format(args.reference))
@@ -400,6 +413,7 @@ def main(sysargs=sys.argv[1:]):
         "kraken2_db": default_kraken,
         "outdir": outdir,
         "reference": args.reference,
+        "annotation": re.sub(".fasta",".gff3",args.reference),
         "isolates": isolates,
         "coverage_script": coverage_script,
         "converter_script": converter_script,
@@ -417,6 +431,7 @@ def main(sysargs=sys.argv[1:]):
         "verbose": args.verbose,
         "technology": args.technology,
         "use_date": args.use_date,
+        "workflow": args.workflow,
     }
 
     # check for nextclade update

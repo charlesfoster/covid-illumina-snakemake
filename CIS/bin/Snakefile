@@ -17,7 +17,7 @@ include: "rules/common.smk"
 ####
 # TMP
 ####
-config["workflow"] = "routine"
+#config["workflow"] = "routine"
 
 if config['use_date']:
     TODAY = date.today().strftime("%Y-%m-%d")
@@ -27,15 +27,14 @@ else:
 ########################
 # Rule 'all' depends on workflow/module choice
 ########################
-
 if config["workflow"] == "routine":
 
     include: "rules/routine.smk"
 
     rule final_qc:
         input:
-            snpEff_file=expand(
-                os.path.join(RESULT_DIR, "{sample}/variants/{sample}.annotated.vcf"),
+            anno_files=expand(
+                os.path.join(RESULT_DIR, "{sample}/variants/{sample}.annotated.tsv"),
                 sample=MAIN_SAMPLES,
             ),
             coverage_plot=expand(
@@ -91,8 +90,8 @@ if config["workflow"] == "wastewater":
 
     rule final_qc:
         input:
-            snpEff_file=expand(
-                os.path.join(RESULT_DIR, "{sample}/variants/{sample}.annotated.vcf"),
+            anno_files=expand(
+                os.path.join(RESULT_DIR, "{sample}/variants/{sample}.annotated.tsv"),
                 sample=MAIN_SAMPLES,
             ),
             coverage_plot=expand(
@@ -108,20 +107,62 @@ if config["workflow"] == "wastewater":
                 os.path.join(RESULT_DIR, "{sample}.qc_results.csv"),
                 sample=MAIN_SAMPLES,
             ),
+            demix_files = expand(
+                os.path.join(
+                    RESULT_DIR, "{sample}/freyja/{sample}.demix"
+                    ),
+                    sample=MAIN_SAMPLES,
+            ),
             report=os.path.join(RESULT_DIR, TODAY + "_softwareVersions.txt"),
+        params:
+            temp_qc = temp(os.path.join(RESULT_DIR, TODAY + "_temp_QC.csv")),
+            freyja_dir = os.path.join(RESULT_DIR, "freyja_aggregated"),
         output:
             qc_file=report(
                 os.path.join(RESULT_DIR, TODAY + "_QC.csv"),
                 caption="report/final_qc.rst",
                 category="Final QC",
             ),
+        conda:
+            "envs/freyja.yaml"
         message:
             "Pipeline complete!"
         run:
+            # aggregate fasta files
+            fa_files = [f for f in glob.glob(RESULT_DIR + "/**/*.consensus.fa", recursive=True) if (s in f for s in MAIN_SAMPLES+NEG_SAMPLES)]
+
+            multifasta = os.path.join(
+                RESULT_DIR, TODAY + ".consensus_genomes.fasta"
+            )
+            if os.path.exists(multifasta):
+                os.remove(multifasta)
+
+            for fa in fa_files:
+                os.system("cat {0} >> {1}".format(fa, multifasta))
+
+            # concatenate QC files
             qc_files = glob.glob(RESULT_DIR + "/*qc_results.csv")
             combined_csv = pd.concat([pd.read_csv(f) for f in qc_files])
             combined_csv.to_csv(
-                os.path.join(RESULT_DIR, TODAY + "_QC.csv"), index=False, header=True
+                params.temp_qc, index=False, header=True
             )
+            
+            # run pango-collapse
+            cmd = "pango-collapse --output {0} --lineage-column lineage {1} > /dev/null".format(output.qc_file, params.temp_qc)
+            os.system(cmd)
+            
+            # aggregate freyja files
+            freyja_files = [f for f in glob.glob(RESULT_DIR + "/**/*.demix", recursive=True) if (s in f for s in MAIN_SAMPLES)]
+            for ff in freyja files:
+                os.system(f"cp {ff} {params.freyja_dir}")
+            cmd = f"freyja aggregate --output {params.freyja_dir}/freyja_aggregated.tsv {params.freyja_dir}/ --ext demix"
+            os.system(cmd)
+            os.system(f"rm {freyja_dir}/*.demix")
+
+            # plot freyja results
+            cmd = f"freyja plot {params.freyja_dir}/freyja_aggregated.tsv --output {params.freyja_dir}/freyja_plot.pdf"
+            os.system(cmd)
+
+            # write out config
             with open(os.path.join(RESULT_DIR, "config.yaml"), "w") as outfile:
                 yaml.dump(config, outfile, default_flow_style=False)

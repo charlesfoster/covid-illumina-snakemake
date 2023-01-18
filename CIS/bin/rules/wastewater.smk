@@ -337,6 +337,42 @@ rule lofreq_bcftools_setGT:
         bcftools index -f {output.vcf_file}
         """
 
+rule freyja_depths:
+    input:
+        bam=os.path.join(
+            RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"
+        ),
+    output:
+        depths=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.depths"),
+    params:
+        reference=REFERENCE,
+    message:
+        "getting freyja depths for {wildcards.sample}"
+    wildcard_constraints:
+        sample="(?!NC)(?!NEG).*",
+    shell:
+        """
+        samtools mpileup -aa -A -d 600000 -Q 20 -q 0 -B -f  {params.reference}  {input.bam} 2> /dev/null | cut -f1-4 > {output.depths}
+        """
+
+
+rule freyja_demix:
+    input:
+        vcf=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz"),
+        depths=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.depths"),
+    output:
+        demix=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.demix"),
+    params:
+        vcf=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.vcf"),
+        demix=os.path.join(RESULT_DIR, "{sample}/freyja/demixing_result.csv"),
+    conda:
+        "../envs/freyja.yaml"
+    shell:
+        """
+        gunzip -c {input.vcf} > {params.vcf}
+        freyja demix {input.vcf} {input.depths} &>/dev/null
+        mv {params.demix} {output.demix}
+        """
 
 rule ivar_bcftools_setGT:
     input:
