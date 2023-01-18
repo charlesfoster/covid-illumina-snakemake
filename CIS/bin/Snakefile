@@ -107,16 +107,10 @@ if config["workflow"] == "wastewater":
                 os.path.join(RESULT_DIR, "{sample}.qc_results.csv"),
                 sample=MAIN_SAMPLES,
             ),
-            demix_files = expand(
-                os.path.join(
-                    RESULT_DIR, "{sample}/freyja/{sample}.demix"
-                    ),
-                    sample=MAIN_SAMPLES,
-            ),
+            freyja_plot = os.path.join(RESULT_DIR, "freyja_aggregated","freyja_plot.pdf"),
             report=os.path.join(RESULT_DIR, TODAY + "_softwareVersions.txt"),
         params:
             temp_qc = temp(os.path.join(RESULT_DIR, TODAY + "_temp_QC.csv")),
-            freyja_dir = os.path.join(RESULT_DIR, "freyja_aggregated"),
         output:
             qc_file=report(
                 os.path.join(RESULT_DIR, TODAY + "_QC.csv"),
@@ -151,18 +145,6 @@ if config["workflow"] == "wastewater":
             cmd = "pango-collapse --output {0} --lineage-column lineage {1} > /dev/null".format(output.qc_file, params.temp_qc)
             os.system(cmd)
             
-            # aggregate freyja files
-            freyja_files = [f for f in glob.glob(RESULT_DIR + "/**/*.demix", recursive=True) if (s in f for s in MAIN_SAMPLES)]
-            for ff in freyja_files:
-                os.system(f"cp {ff} {params.freyja_dir}")
-            cmd = f"freyja aggregate --output {params.freyja_dir}/freyja_aggregated.tsv {params.freyja_dir}/ --ext demix"
-            os.system(cmd)
-            os.system(f"rm {freyja_dir}/*.demix")
-
-            # plot freyja results
-            cmd = f"freyja plot {params.freyja_dir}/freyja_aggregated.tsv --output {params.freyja_dir}/freyja_plot.pdf"
-            os.system(cmd)
-
             # write out config
             with open(os.path.join(RESULT_DIR, "config.yaml"), "w") as outfile:
                 yaml.dump(config, outfile, default_flow_style=False)

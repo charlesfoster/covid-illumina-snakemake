@@ -374,6 +374,33 @@ rule freyja_demix:
         mv {params.demix} {output.demix}
         """
 
+rule freyja_aggregate_and_plot:
+    input:
+        demix_files = expand(
+            os.path.join(
+                RESULT_DIR, "{sample}/freyja/{sample}.demix"
+                ),
+                sample=MAIN_SAMPLES,
+        ),
+    output:
+        plot=os.path.join(RESULT_DIR, "freyja_aggregated","freyja_plot.pdf"),
+    params:
+        agg=os.path.join(RESULT_DIR, "freyja_aggregated","freyja_aggregated.tsv"),
+        outdir = os.path.join(RESULT_DIR, "freyja_aggregated"),
+    conda:
+        "../envs/freyja.yaml"
+    shell:
+        """
+        for ff in {input.demix_files}:
+            cp $ff {params.freyja_dir}
+        freyja aggregate --output {params.agg} {params.outdir}/ --ext demix"
+        rm {params.outdir}/*.demix
+
+        # plot freyja results
+        freyja plot {params.agg} --output {output.plot}
+        """
+
+
 rule ivar_bcftools_setGT:
     input:
         vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf"),
