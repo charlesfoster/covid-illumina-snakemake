@@ -214,6 +214,13 @@ def main(sysargs=sys.argv[1:]):
         default="routine",
     )
     parser.add_argument(
+        "-x",
+        "--skip_update_check",
+        action="store_true",
+        default=False,
+        help="Skip check for a Nextclade update",
+    )
+    parser.add_argument(
         "--legacy",
         action="store_true",
         help="Output the quality control column names in 'legacy' format. Default: {}".format(False),
@@ -435,7 +442,8 @@ def main(sysargs=sys.argv[1:]):
     }
 
     # check for nextclade update
-    check_nextclade(thisdir)
+    if not args.skip_update_check:
+        check_nextclade(thisdir)
 
     if args.print_dag:
         flat_config = []

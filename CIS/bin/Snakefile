@@ -124,7 +124,7 @@ if config["workflow"] == "wastewater":
                 category="Final QC",
             ),
         conda:
-            "envs/freyja.yaml"
+            "envs/freyja.yaml",
         message:
             "Pipeline complete!"
         run:
@@ -153,7 +153,7 @@ if config["workflow"] == "wastewater":
             
             # aggregate freyja files
             freyja_files = [f for f in glob.glob(RESULT_DIR + "/**/*.demix", recursive=True) if (s in f for s in MAIN_SAMPLES)]
-            for ff in freyja files:
+            for ff in freyja_files:
                 os.system(f"cp {ff} {params.freyja_dir}")
             cmd = f"freyja aggregate --output {params.freyja_dir}/freyja_aggregated.tsv {params.freyja_dir}/ --ext demix"
             os.system(cmd)
