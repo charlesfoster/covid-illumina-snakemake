@@ -259,6 +259,15 @@ def main(sysargs=sys.argv[1:]):
         default=False,
     )
     parser.add_argument(
+        "--snv_min",
+        action="store",
+        required=False,
+        help="Suffix used to identify samples from reads. Default: {}".format(
+            0.25
+        ),
+        metavar="float",
+    )
+    parser.add_argument(
         "--suffix",
         action="store",
         help="Suffix used to identify samples from reads. Default: {}".format(
@@ -379,12 +388,21 @@ def main(sysargs=sys.argv[1:]):
         )
         sys.exit(1)
 
-    consensus_freq = 0.9
+    consensus_freq = 0.75
     if args.consensus_freq:
         consensus_freq = float(args.consensus_freq)
         if consensus_freq > 1 or consensus_freq < 0:
             print(
                 "#####\n\033[91mError\033[0m: The consensus_freq option must be a float number between 0 and 1\n#####\n"
+            )
+            sys.exit(1)
+
+    snv_min = 0.25
+    if args.snv_min:
+        snv_min = float(args.snv_min)
+        if snv_min > 1 or snv_min < 0:
+            print(
+                "#####\n\033[91mError\033[0m: The snv_min option must be a float number between 0 and 1\n#####\n"
             )
             sys.exit(1)
 
@@ -446,6 +464,7 @@ def main(sysargs=sys.argv[1:]):
         "threads": args.threads,
         "consensus_freq": consensus_freq,
         "min_depth": min_depth,
+        "snv_min": snv_min,
         "indel_freq": indel_freq,
         "keep_reads": args.keep_reads,
         "verbose": args.verbose,

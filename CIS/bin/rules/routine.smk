@@ -316,7 +316,9 @@ rule lofreq_bcftools_setGT:
     log:
         os.path.join(RESULT_DIR, "{sample}/variants/{sample}.bcftools_setGT.log"),
     params:
-        snv_freq=0.1,
+        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.raw.vcf.gz"),
+        clean_vcf=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.clean.vcf.gz"),
+        snv_freq=config["snv_min"],
         con_freq=CON_FREQ,
         indel_freq=INDEL_FREQ,
         min_depth=config['min_depth'],
@@ -329,12 +331,14 @@ rule lofreq_bcftools_setGT:
         bcftools index {input.vcf_file}
         bcftools +fill-tags {input.vcf_file} -Ou -- -t "TYPE" | \
         bcftools norm -Ou -a -m -  2> /dev/null | \
-        bcftools view -f 'PASS,.' -i "INFO/AF >= {params.snv_freq} & INFO/DP >= {params.min_depth}" -Oz -o {output.vcf_file}
-        bcftools index {output.vcf_file}
-        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
-        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.indel_freq}' -n . 2>> {log} | \
+        bcftools view -f 'PASS,.' -i "INFO/DP >= {params.min_depth}" -Oz -o {params.vcf_file}
+        bcftools index {params.vcf_file}
+        bcftools +setGT {params.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
+        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.indel_freq} || TYPE="SNP" && INFO/AF <= {params.snv_freq}' -n . 2>> {log} | \
         bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF >= {params.con_freq}' -n 'c:1/1' 2>> {log}
         bcftools index -f {output.vcf_file}
+        bcftools view -i "FORMAT/GT != 'mis'" {output.vcf_file} -Oz -o {params.clean_vcf}
+        bcftools index -f {params.clean_vcf}
         """
 
 
