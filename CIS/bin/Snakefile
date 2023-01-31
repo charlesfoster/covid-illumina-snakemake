@@ -51,9 +51,8 @@ if config["workflow"] == "routine":
                 sample=MAIN_SAMPLES,
             ),
             report=os.path.join(RESULT_DIR, TODAY + "_softwareVersions.txt"),
-        params:
-            temp_qc = temp(os.path.join(RESULT_DIR, TODAY + "_temp_QC.csv")),
         output:
+            temp_qc = temp(os.path.join(RESULT_DIR, TODAY + "_temp_QC.csv")),
             qc_file=report(
                 os.path.join(RESULT_DIR, TODAY + "_QC.csv"),
                 caption="report/final_qc.rst",
@@ -76,9 +75,9 @@ if config["workflow"] == "routine":
             qc_files = glob.glob(RESULT_DIR + "/*qc_results.csv")
             combined_csv = pd.concat([pd.read_csv(f) for f in qc_files])
             combined_csv.to_csv(
-                params.temp_qc, index=False, header=True
+                output.temp_qc, index=False, header=True
             )
-            cmd = "pango-collapse --output {0} --lineage-column lineage {1} > /dev/null".format(output.qc_file, params.temp_qc)
+            cmd = "pango-collapse --output {0} --lineage-column lineage {1} > /dev/null".format(output.qc_file, output.temp_qc)
             os.system(cmd)
             with open(os.path.join(RESULT_DIR, "config.yaml"), "w") as outfile:
                 yaml.dump(config, outfile, default_flow_style=False)

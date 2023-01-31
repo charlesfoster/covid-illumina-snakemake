@@ -515,6 +515,7 @@ def main(sysargs=sys.argv[1:]):
             quiet=False,
             cores=args.threads,
             lock=False,
+            #delete_temp_output=True,
         )
     elif config["verbose"]:
         print("\n**** CONFIG ****")
@@ -536,6 +537,7 @@ def main(sysargs=sys.argv[1:]):
             quiet=False,
             cores=args.threads,
             lock=False,
+            #delete_temp_output=True,
         )
     else:
         status = snakemake.snakemake(
@@ -553,6 +555,7 @@ def main(sysargs=sys.argv[1:]):
             quiet=True,
             cores=args.threads,
             lock=False,
+            #delete_temp_output=True,
         )
 
     if status and args.print_dag:  # translate "success" into shell exit code of 0

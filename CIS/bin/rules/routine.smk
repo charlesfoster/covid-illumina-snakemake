@@ -51,13 +51,13 @@ rule ivar_trim:
         sort_trim_bam=os.path.join(
             RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"
         ),
+        trim_bam=temp(os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.bam")),
     message:
         "mapping {wildcards.sample} reads to reference"
     threads: 4
     log:
         os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.ivar_trim.log"),
     params:
-        trim_bam=temp(os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.bam")),
         bedfile=SCHEME,
         offset=IVAR_OFFSET,
         prefix=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim"),
@@ -72,7 +72,7 @@ rule ivar_trim:
         """
         touch {output.sort_trim_bam}
         ivar trim -i {input.bam} -x {params.offset} -b {params.bedfile} -p {params.prefix} -e 2&> {log}
-        samtools sort -@ {threads} {params.trim_bam} -o {output.sort_trim_bam} 2> /dev/null
+        samtools sort -@ {threads} {output.trim_bam} -o {output.sort_trim_bam} 2> /dev/null
         samtools index {output.sort_trim_bam}
         """
 
