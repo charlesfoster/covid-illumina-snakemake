@@ -361,7 +361,7 @@ rule freyja_update_dataset:
     params:
         location = config['freyja_dataset']
     container:
-        "docker://staphb/freyja:1.3.11"
+        "docker://staphb/freyja:1.4.3"
     shell:
         """
         mkdir -p {params.location}
@@ -382,7 +382,7 @@ rule freyja_demix:
         demix=os.path.join(RESULT_DIR, "{sample}/freyja/demixing_result.csv"),
         barcodes = os.path.join(config['freyja_dataset'],"usher_barcodes.csv"),
     container:
-        "docker://staphb/freyja:1.3.11"
+        "docker://staphb/freyja:1.4.3"
     shell:
         """
         set +e
@@ -405,7 +405,7 @@ rule freyja_aggregate_and_plot:
         agg=os.path.join(RESULT_DIR, "freyja_aggregated","freyja_aggregated.tsv"),
         outdir = os.path.join(RESULT_DIR, "freyja_aggregated"),
     container:
-        "docker://staphb/freyja:1.3.11"
+        "docker://staphb/freyja:1.4.3"
     shell:
         """
         for ff in {input.demix_files}; do

@@ -29,4 +29,5 @@ dependencies:
     - pango-collapse
     - psutil
     - pygraphviz
+    - cmp_version
 prefix: /home/cfos/miniconda3/envs/CIS
