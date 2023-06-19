@@ -385,8 +385,10 @@ rule freyja_demix:
         "docker://staphb/freyja:1.3.11"
     shell:
         """
+        set +e
         gunzip -c {input.vcf} > {params.vcf}
-        freyja demix {params.vcf} {input.depths} --output {output.demix} --barcodes {params.barcodes} &>/dev/null
+        freyja demix {params.vcf} {input.depths} --output {output.demix} --barcodes {params.barcodes} &>/dev/null || touch {output.demix} 
+        set -e
         """
 
 rule freyja_aggregate_and_plot:
@@ -407,9 +409,12 @@ rule freyja_aggregate_and_plot:
     shell:
         """
         for ff in {input.demix_files}; do
-            cp $ff {params.outdir}
+            if [ -s ${{ff}} ]; then
+                cp $ff {params.outdir}
+            fi
         done
         freyja aggregate --output {params.agg} {params.outdir}/ --ext demix
+        sed -i -e "s/.vcf//g" -e "s/_/-/g" {params.agg}
         rm {params.outdir}/*.demix
 
         # plot freyja results

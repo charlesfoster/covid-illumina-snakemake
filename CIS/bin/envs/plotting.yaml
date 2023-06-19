@@ -1,0 +1,15 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - bedtools
+  - r-base>=4
+  - r-rlang
+  - r-ggpubr
+  - r-ggplot2
+  - r-seqinr
+  - r-stringr
+  - r-optparse
+  - r-data.table
+  - r-dplyr

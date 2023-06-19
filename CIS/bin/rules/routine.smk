@@ -99,6 +99,8 @@ rule genomecov:
         script=COVERAGE_SCRIPT,
         bedfile=SCHEME,
         scheme=SCHEME_NAME,
+    conda:
+        "../envs/plotting.yaml"
     resources:
         cpus=1,
     wildcard_constraints:
@@ -718,6 +720,8 @@ rule kraken2:
     wildcard_constraints:
         sample="(NC|NEG).*",
     threads: 4
+    conda:
+        "../envs/kraken2.yaml"
     resources:
         mem_mb=55000,
         cpus=4,
