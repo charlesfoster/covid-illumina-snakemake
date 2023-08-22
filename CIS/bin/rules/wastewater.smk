@@ -107,7 +107,7 @@ rule genomecov:
         """
         touch {output.amp_plot}
         bedtools genomecov -ibam {input.bam} -d > {params.coverage}  2> /dev/null
-        Rscript {params.script} {params.coverage} {params.bedfile} {output.main_plot} {output.amp_plot} {params.scheme} {wildcards.sample} 2> /dev/null
+        touch {output.main_plot} {output.amp_plot}
         """
 
 
