@@ -26,14 +26,26 @@ A pipeline to facilitate genomic surveillance of SARS-CoV-2, adopted by the seve
 Author: Dr Charles Foster
 
 # Starting out
-To begin with, clone this github repository:
+## Linux computers
+To begin with, clone the 'main' branch of this github repository:
 
 ```
 git clone https://github.com/charlesfoster/covid-illumina-snakemake.git
 
 cd covid-illumina-snakemake
 ```
+## Mac computers
+To begin with, clone the 'no-singularity' branch of this github repository:
 
+```
+git clone -b no-singularity https://github.com/charlesfoster/covid-illumina-snakemake.git
+
+cd covid-illumina-snakemake
+```
+
+Switch to the 'no-singularity' branch while on Github to read more.
+
+## Conda 
 Next, install *most* dependencies using `conda`:
 
 ```
@@ -89,10 +101,11 @@ By default, the program assumes that you have used the 'Midnight' amplicon proto
 All other options are as follows, and can be accessed with `CIS --help`:
 
 ```
+
            /^\/^\  COVID
          _|__|  O|  Illumina
 \/     /~     \_/ \    Pipeline
- \____|__________/  \      Snakemake edition
+ \____|__________/  \      Snakemake edition v0.10.2
         \_______      \
                 `\     \                 \
                   |     |                  \
@@ -106,50 +119,67 @@ All other options are as follows, and can be accessed with `CIS --help`:
           \      ~-____-~    _-~    ~-_    ~-_-~    /
             ~-_           _-~          ~-_       _-~
                ~--______-~                ~-___-~    
-
-usage: CIS [options] <query_directory>
+    
+usage: CIS [options] <query_directory> 
 
 covid-illumina-snakemake: a pipeline for analysis SARS-CoV-2 samples
 
 positional arguments:
   query_directory       Path to directory with reads to process.
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  -c <int>, --consensus_freq <int>
-                        Variant allele frequency threshold for a variant to be
-                        incorporated into consensus genome. Default: 0.9
+  -c <float>, --consensus_freq <float>
+                        Variant allele frequency threshold for a non-indel variant to be incorporated into consensus
+                        genome. Default: 0.75
+  -if <float>, --indel_freq <float>
+                        Variant allele frequency threshold for an indel variant to be incorporated into consensus
+                        genome. Default: 0.75
   -i ISOLATES, --isolates ISOLATES
-                        List of isolates to assemble (Default: all isolates in
-                        query_directory)
-  -f, --force           Force overwriting of completed files (Default: files
-                        not overwritten)
+                        List of isolates to assemble (Default: all isolates in query_directory)
+  -f, --force           Force overwriting of completed files (Default: files not overwritten)
   -k KRAKEN2_DB, --kraken2_db KRAKEN2_DB
-                        kraken2 database. Default: /data/kraken2_kmers/viral
+                        kraken2 database. Default: /data/kraken_files/k2_viral
+  -m MIN_DEPTH, --min_depth MIN_DEPTH
+                        Minimum depth for (1) an SNV to be kept; and (2) consensus genome generation. Default: 10
   -n, --dry_run         Dry run only
   -o OUTDIR, --outdir OUTDIR
-                        Output directory. Default: /home/vrl/Programs/covid-
-                        illumina-snakemake/results/2021-12-02
+                        Explicitly specify output directory rather than the default of
+                        '/home/cfos/Programs/COVID_Illumina_Snakemake/results/<input_reads_directory_name>'
   -p, --print_dag       Save directed acyclic graph (DAG) of workflow
   -r REFERENCE, --reference REFERENCE
-                        Reference genome to use (Default:
-                        /home/vrl/miniconda3/envs/CIS/lib/python3.9/site-
+                        Reference genome to use (Default: /home/cfos/miniconda3/envs/CIS/lib/python3.10/site-
                         packages/CIS/bin/NC_045512.fasta)
   -s SCHEME, --scheme SCHEME
-                        Primer scheme to use: built-in opts are 'midnight',
-                        'swift', 'eden', but if using your own scheme provide
-                        the full path to the bed file here (Default: midnight)
+                        Primer scheme to use. Built-in opts are:
+                                 - 'midnight'
+                                 - 'swift'
+                                 - 'eden'
+                                 - 'articv4.1'
+                                 - 'articv3'
+                         
+                                 If using your own scheme provide the full path to the bed file here (Default:
+                                 midnight)
   -t <int>, --threads <int>
                         Number of threads to use
   -v VARIANT_CALLER, --variant_caller VARIANT_CALLER
-                        Variant caller to use. Choices: 'lofreq' or 'ivar'
-                        Default: 'lofreq'
+                        Variant caller to use. Choices: 'lofreq' or 'ivar' Default: 'lofreq'
+  -w WORKFLOW, --workflow WORKFLOW
+                        Workflow to use. Choices: 'routine' or 'wastewater' Default: 'routine'
+  -xn, --skip_nextclade_check
+                        Skip check for a Nextclade update
+  -xf, --skip_freyja_check
+                        Skip check for a freyja update (if using wastewater workflow)
+  --legacy              Output the quality control column names in 'legacy' format. Default: False
+  --no_singularity      Stop the use of singularity. Default: False
   --keep_reads          Keep trimmed reads
   --version             show program's version number and exit
-  --suffix <str>        Suffix used to identify samples from reads. Default:
-                        _L001_R1_001.fastq.gz
-  --max_memory <int>    Maximum memory (in MB) that you would like to provide
-                        to snakemake. Default: 60082MB
+  --technology <str>    Sequencing technology (Default: 'Illumina Miseq')
+  --use_date            Name output directory and files after today's date rather than input reads directory name
+  --snv_min float       Suffix used to identify samples from reads. Default: 0.25
+  --suffix <str>        Suffix used to identify samples from reads. Default: _L001_R1_001.fastq.gz
+  --max_memory <int>    Maximum memory (in MB) that you would like to provide to snakemake. Default: 53147MB
+  --redo_demix          Redo demixing using freyja ('wastewater' workflow only)
   --verbose             Print junk to screen.
   --report              Generate report.
 ```
