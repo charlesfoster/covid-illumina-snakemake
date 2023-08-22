@@ -29,10 +29,12 @@ Author: Dr Charles Foster
 To begin with, clone this github repository:
 
 ```
-git clone https://github.com/charlesfoster/covid-illumina-snakemake.git
+git clone -b no-singularity https://github.com/charlesfoster/covid-illumina-snakemake.git
 
 cd covid-illumina-snakemake
 ```
+
+**NOTE**: this branch differs from the 'main' and 'dev' branches because it does not use `singularity` to run rules in containers, which is a bit of a pain to get working on Mac OS.
 
 Next, install *most* dependencies using `conda`:
 
@@ -55,9 +57,9 @@ pip install .
 
 Other dependencies:
 * Lineages are typed using `pangolin`. Accordingly, `pangolin` needs to be installed according to instructions at https://github.com/cov-lineages/pangolin.
-* Variants are called using either `lofreq` (preferred) or `ivar`. Ideally we could install these via `mamba` in the main `environment.yml` file, but the hosted versions do not yet support htslib>=1.13 (needed for our specific `bcftools commands`). Both `lofreq` and `ivar` are currently installed into their own environments during execution of the CIS pipeline. These environments are only created the first time you run the pipeline, and then subsequent runs use the isolated `lofreq` and `ivar` environments automatically.
+* Other programs like `lofreq` and `ivar` will be installed into their own environments. These environments are only created the first time you run the pipeline, and then subsequent runs use the isolated environments automatically.
 
-**tl;dr**: you don't need to do anything for `lofreq` or `ivar` to work; just don't get confused during the initial pipeline run when the terminal indicates creation of a new conda environment. You should run `CIS` from the same directory each time, otherwise a new conda environment will be created each time.
+**tl;dr**: you don't need to do anything for the environments to work; just don't get confused during the initial pipeline run when the terminal indicates creation of a new conda environment. You should run `CIS` from the same directory each time, otherwise a new conda environment will be created each time.
 
 # Usage
 The environment with all necessary tools is installed as '`CIS`' for brevity. The environment should first be activated:
@@ -89,10 +91,11 @@ By default, the program assumes that you have used the 'Midnight' amplicon proto
 All other options are as follows, and can be accessed with `CIS --help`:
 
 ```
+
            /^\/^\  COVID
          _|__|  O|  Illumina
 \/     /~     \_/ \    Pipeline
- \____|__________/  \      Snakemake edition
+ \____|__________/  \      Snakemake edition v0.10.2
         \_______      \
                 `\     \                 \
                   |     |                  \
@@ -106,50 +109,67 @@ All other options are as follows, and can be accessed with `CIS --help`:
           \      ~-____-~    _-~    ~-_    ~-_-~    /
             ~-_           _-~          ~-_       _-~
                ~--______-~                ~-___-~    
-
-usage: CIS [options] <query_directory>
+    
+usage: CIS [options] <query_directory> 
 
 covid-illumina-snakemake: a pipeline for analysis SARS-CoV-2 samples
 
 positional arguments:
   query_directory       Path to directory with reads to process.
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  -c <int>, --consensus_freq <int>
-                        Variant allele frequency threshold for a variant to be
-                        incorporated into consensus genome. Default: 0.9
+  -c <float>, --consensus_freq <float>
+                        Variant allele frequency threshold for a non-indel variant to be incorporated into consensus
+                        genome. Default: 0.75
+  -if <float>, --indel_freq <float>
+                        Variant allele frequency threshold for an indel variant to be incorporated into consensus
+                        genome. Default: 0.75
   -i ISOLATES, --isolates ISOLATES
-                        List of isolates to assemble (Default: all isolates in
-                        query_directory)
-  -f, --force           Force overwriting of completed files (Default: files
-                        not overwritten)
+                        List of isolates to assemble (Default: all isolates in query_directory)
+  -f, --force           Force overwriting of completed files (Default: files not overwritten)
   -k KRAKEN2_DB, --kraken2_db KRAKEN2_DB
-                        kraken2 database. Default: /data/kraken2_kmers/viral
+                        kraken2 database. Default: /data/kraken_files/k2_viral
+  -m MIN_DEPTH, --min_depth MIN_DEPTH
+                        Minimum depth for (1) an SNV to be kept; and (2) consensus genome generation. Default: 10
   -n, --dry_run         Dry run only
   -o OUTDIR, --outdir OUTDIR
-                        Output directory. Default: /home/vrl/Programs/covid-
-                        illumina-snakemake/results/2021-12-02
+                        Explicitly specify output directory rather than the default of
+                        '/home/cfos/Programs/COVID_Illumina_Snakemake/results/<input_reads_directory_name>'
   -p, --print_dag       Save directed acyclic graph (DAG) of workflow
   -r REFERENCE, --reference REFERENCE
-                        Reference genome to use (Default:
-                        /home/vrl/miniconda3/envs/CIS/lib/python3.9/site-
+                        Reference genome to use (Default: /home/cfos/miniconda3/envs/CIS/lib/python3.10/site-
                         packages/CIS/bin/NC_045512.fasta)
   -s SCHEME, --scheme SCHEME
-                        Primer scheme to use: built-in opts are 'midnight',
-                        'swift', 'eden', but if using your own scheme provide
-                        the full path to the bed file here (Default: midnight)
+                        Primer scheme to use. Built-in opts are:
+                                 - 'midnight'
+                                 - 'swift'
+                                 - 'eden'
+                                 - 'articv4.1'
+                                 - 'articv3'
+                         
+                                 If using your own scheme provide the full path to the bed file here (Default:
+                                 midnight)
   -t <int>, --threads <int>
                         Number of threads to use
   -v VARIANT_CALLER, --variant_caller VARIANT_CALLER
-                        Variant caller to use. Choices: 'lofreq' or 'ivar'
-                        Default: 'lofreq'
+                        Variant caller to use. Choices: 'lofreq' or 'ivar' Default: 'lofreq'
+  -w WORKFLOW, --workflow WORKFLOW
+                        Workflow to use. Choices: 'routine' or 'wastewater' Default: 'routine'
+  -xn, --skip_nextclade_check
+                        Skip check for a Nextclade update
+  -xf, --skip_freyja_check
+                        Skip check for a freyja update (if using wastewater workflow)
+  --legacy              Output the quality control column names in 'legacy' format. Default: False
+  --no_singularity      Stop the use of singularity (no effect: singularity is disabled on this branch)
   --keep_reads          Keep trimmed reads
   --version             show program's version number and exit
-  --suffix <str>        Suffix used to identify samples from reads. Default:
-                        _L001_R1_001.fastq.gz
-  --max_memory <int>    Maximum memory (in MB) that you would like to provide
-                        to snakemake. Default: 60082MB
+  --technology <str>    Sequencing technology (Default: 'Illumina Miseq')
+  --use_date            Name output directory and files after today's date rather than input reads directory name
+  --snv_min float       Suffix used to identify samples from reads. Default: 0.25
+  --suffix <str>        Suffix used to identify samples from reads. Default: _L001_R1_001.fastq.gz
+  --max_memory <int>    Maximum memory (in MB) that you would like to provide to snakemake. Default: 53222MB
+  --redo_demix          Redo demixing using freyja ('wastewater' workflow only)
   --verbose             Print junk to screen.
   --report              Generate report.
 ```

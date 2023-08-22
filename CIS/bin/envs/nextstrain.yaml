@@ -3,4 +3,4 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - nextclade
+  - nextclade==2.14.0

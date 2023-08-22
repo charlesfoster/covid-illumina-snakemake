@@ -63,7 +63,6 @@ rule ivar_trim:
         prefix=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim"),
     conda:
         "../envs/ivar.yaml"
-        #"docker://quay.io/biocontainers/ivar:1.3.1--h3198e80_1"
     resources:
         cpus=4,
     wildcard_constraints:
@@ -514,8 +513,8 @@ rule update_nextclade:
         update_info = os.path.join(RESULT_DIR, "nextclade_update_info.txt"),
     params:
         nextclade_dataset = config['nextclade_dataset']
-    container:
-        "docker://nextstrain/nextclade:2.9.1"
+    conda:
+        "../envs/nextstrain.yaml"
     shell:
         """
         echo "nextclade version:" | tee -a {output.update_info}
@@ -532,8 +531,8 @@ rule nextclade:
         report=os.path.join(RESULT_DIR, "{sample}/nextclade/{sample}.nextclade_report.tsv"),
     params:
         nextclade_dataset = config['nextclade_dataset'],
-    container:
-        "docker://nextstrain/nextclade:2.9.1"
+    conda:
+        "../envs/nextstrain.yaml"
     resources:
         cpus=1,
     threads: 4,

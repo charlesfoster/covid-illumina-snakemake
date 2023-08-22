@@ -235,7 +235,7 @@ def main(sysargs=sys.argv[1:]):
     parser.add_argument(
         "--no_singularity",
         action="store_true",
-        help="Stop the use of singularity. Default: {}".format(False),
+        help="Stop the use of singularity (no effect: singularity is disabled on this branch)",
     )
     parser.add_argument(
         "--keep_reads", action="store_true", help="Keep trimmed reads", default=False
@@ -440,7 +440,7 @@ def main(sysargs=sys.argv[1:]):
     if args.no_singularity:
         use_singularity = False
     else:
-        use_singularity = True
+        use_singularity = False
 
     snakefile = os.path.join(thisdir, "bin", "Snakefile")
 
