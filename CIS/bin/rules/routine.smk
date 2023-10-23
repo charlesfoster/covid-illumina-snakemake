@@ -502,11 +502,13 @@ rule pangolin:
         fasta=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.consensus.fa"),
     output:
         report=os.path.join(RESULT_DIR, "{sample}/pangolin/{sample}.lineage_report.csv"),
+    params:
+        pangolin_args=config['extra_pangolin_args'],
     conda:
         "../envs/pangolin.yaml"
     shell:
         """
-        pangolin --outfile {output.report} --skip-scorpio {input.fasta} &> /dev/null
+        pangolin --outfile {output.report} {params.pangolin_args} {input.fasta} &> /dev/null
         """
 
 rule update_nextclade:

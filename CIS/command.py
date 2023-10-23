@@ -289,6 +289,14 @@ def main(sysargs=sys.argv[1:]):
         help="Redo demixing using freyja ('wastewater' workflow only)",
         default=False,
     )
+    parser.add_argument(
+        "-e",
+        "--extra_pangolin_options",
+        action="store",
+        help="Extra options to be passed to pangolin",
+        default='',
+        metavar="<str>",
+    )
     parser.add_argument("--verbose", action="store_true", help="Print junk to screen.")
     parser.add_argument("--report", action="store_true", help="Generate report.")
 
@@ -466,6 +474,7 @@ def main(sysargs=sys.argv[1:]):
         "min_depth": min_depth,
         "snv_min": snv_min,
         "indel_freq": indel_freq,
+        "extra_pangolin_args": args.extra_pangolin_options,
         "keep_reads": args.keep_reads,
         "verbose": args.verbose,
         "technology": args.technology,
