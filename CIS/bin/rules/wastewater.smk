@@ -63,7 +63,7 @@ rule ivar_trim:
         prefix=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim"),
     conda:
         "../envs/ivar.yaml"
-        #"docker://quay.io/biocontainers/ivar:1.3.1--h3198e80_1"
+        #"docker://quay.io/biocontainers/ivar:1.4.7--pyhdfd78af_0"
     resources:
         cpus=4,
     wildcard_constraints:
@@ -361,7 +361,7 @@ rule freyja_update_dataset:
     params:
         location = config['freyja_dataset']
     container:
-        "docker://staphb/freyja:1.4.3"
+        "docker://quay.io/biocontainers/freyja:1.4.5--pyhdfd78af_0"
     shell:
         """
         mkdir -p {params.location}
@@ -381,13 +381,16 @@ rule freyja_demix:
         vcf=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.vcf"),
         demix=os.path.join(RESULT_DIR, "{sample}/freyja/demixing_result.csv"),
         barcodes = os.path.join(config['freyja_dataset'],"usher_barcodes.csv"),
+    log:
+        os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.freyja_demix.log"),
     container:
-        "docker://staphb/freyja:1.4.3"
+        "docker://quay.io/biocontainers/freyja:1.4.5--pyhdfd78af_0"
     shell:
         """
         set +e
         gunzip -c {input.vcf} > {params.vcf}
-        freyja demix {params.vcf} {input.depths} --output {output.demix} --barcodes {params.barcodes} &>/dev/null || touch {output.demix} 
+        freyja --version > {log}
+        freyja demix {params.vcf} {input.depths} --output {output.demix} --barcodes {params.barcodes} &>>{log} || touch {output.demix} 
         set -e
         """
 
@@ -405,7 +408,7 @@ rule freyja_aggregate_and_plot:
         agg=os.path.join(RESULT_DIR, "freyja_aggregated","freyja_aggregated.tsv"),
         outdir = os.path.join(RESULT_DIR, "freyja_aggregated"),
     container:
-        "docker://staphb/freyja:1.4.3"
+        "docker://quay.io/biocontainers/freyja:1.4.5--pyhdfd78af_0"
     shell:
         """
         for ff in {input.demix_files}; do

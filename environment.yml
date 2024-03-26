@@ -4,30 +4,26 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - bedtools
+  - bedtools==2.31.1
   - bwa>=0.7.17
-#  - mamba
-  - fastp
-  - imagemagick
-  - jinja2
-  - kraken2
-  - networkx
-  - pip
-  - python>=3.8
-  - qualimap
+  - fastp==0.23.4
+  - jinja2==3.1.2
+  - kraken2==2.1.2
+  - networkx==3.2.1
+  - pip==23.0.1
+  - python>=3.8,<=3.10
+  - qualimap==2.2.2d
   - r-base>=4.1
   - htslib==1.13
   - samtools==1.13
   - bcftools==1.13
-  - snpeff
-  - seqmagick
+  - seqmagick==0.8.6
   - snakemake-minimal>=5.13
-  - snpEff
   - singularity==3.7.1
+  - pandas==1.5.3
+  - psutil==5.9.5
+  - pygraphviz
+  - libxml2 >=2.9.12,<2.11.0a0
   - pip:
-    - pandas
-    - pango-collapse
-    - psutil
-    - pygraphviz
-    - cmp_version
-prefix: /home/cfos/miniconda3/envs/CIS
+    - pango-collapse==0.7.0
+    - cmp_version==3.0.0

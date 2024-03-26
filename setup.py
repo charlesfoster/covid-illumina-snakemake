@@ -20,9 +20,9 @@ setup(name='CIS',
                 ],
 #      package_data={"CIS":["bin/*"]},
       package_data={"CIS":[*glob_fix("CIS", "bin/**/*")]},
-      install_requires=[
-            'pandas>=1.0.1',
-        ],
+#      install_requires=[
+#            'pandas>=1.0.1',
+#        ],
       description='COVID Illumina Pipeline from SAVID: Snakemake edition',
       url='https://github.com/charlesfoster/covid-illumina-snakemake',
       author='Dr Charles Foster',
