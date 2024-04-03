@@ -6,7 +6,7 @@ Created on Fri Nov 12 12:59:25 2021
 @author: cfos
 """
 ########################
-# Clinical sample workflow
+# Wastewater sample workflow
 ########################
 import re
 import pathlib
@@ -188,9 +188,9 @@ rule ivar_variants:
         reference=REFERENCE,
         converter=CONVERTER,
         qual=20,
-        depth=10,
+        depth=config["min_depth"],
         con_freq=CON_FREQ,
-        snv_freq=0.1,
+        snv_freq=config["snv_min_freq"],
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*",
     conda:
@@ -202,53 +202,6 @@ rule ivar_variants:
         cat {input.mpileup} | ivar variants -p {params.prefix} -r {params.reference} -q {params.qual} -m {params.depth} -t {params.snv_freq} 2&>{log}
         python {params.converter} {params.tsv_file} {output.temp_vcf_file} 2> {log}
         """
-
-
-#rule lofreq_variants_orig:
-#    input:
-#        bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
-#    output:
-#        new_bam=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam")),
-#        new_bam_index=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam.bai")
-#        ),
-#        tmp_vcf1=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")
-#        ),
-#        tmp_vcf2=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz")
-#        ),
-#        tmp_vcf1_index=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz.tbi")
-#        ),
-#        tmp_vcf2_index=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz.tbi")
-#        ),
-#    message:
-#        "calling variants for {wildcards.sample}"
-#    threads: 8
-#    log:
-#        os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.log"),
-#    params:
-#        vcf_script=VCF_MOD,
-#        prefix="{sample}",
-#        reference=REFERENCE,
-#        depth=10,
-#    wildcard_constraints:
-#        sample="(?!NC)(?!NEG).*",
-#    conda:
-#        "../envs/lofreq.yaml"
-#    resources:
-#        cpus=8,
-#    shell:
-#        """
-#        lofreq indelqual --dindel {input.bam} -f {params.reference} | \
-#        samtools sort -@ {threads} -o {output.new_bam} 2> /dev/null
-#        samtools index {output.new_bam}
-#        lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
-#        -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
-#        bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
-#        """
 
 rule lofreq_variants:
     input:
@@ -269,15 +222,11 @@ rule lofreq_variants:
         tmp_vcf1=temp(
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")
         ),
-        tmp_vcf2=temp(
-            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz")
-        ),
+        lofreq_raw=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq_raw.vcf.gz"),
         tmp_vcf1_index=temp(
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz.tbi")
         ),
-        tmp_vcf2_index=temp(
-            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz.tbi")
-        ),
+        lofreq_raw_index=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq_raw.vcf.gz.tbi"),
     message:
         "calling variants for {wildcards.sample}"
     threads: 8
@@ -301,12 +250,10 @@ rule lofreq_variants:
         samtools index {output.new_bam}
         lofreq indelqual --dindel {output.new_bam} -f {params.reference} -o {output.new_bam3} 2> /dev/null
         samtools index {output.new_bam3}
-        samtools index {output.new_bam3}
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam3} 2> {log}
-        bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
+        bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.lofreq_raw}
         """
-        #lofreq alnqual -b {output.new_bam2} {params.reference} > {output.new_bam3}
 
 rule lofreq_bcftools_setGT:
     input:
@@ -316,7 +263,9 @@ rule lofreq_bcftools_setGT:
     log:
         os.path.join(RESULT_DIR, "{sample}/variants/{sample}.bcftools_setGT.log"),
     params:
-        snv_freq=0.1,
+        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.raw.vcf.gz"),
+        clean_vcf=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.clean.vcf.gz"),
+        snv_freq=config["snv_min_freq"],
         con_freq=CON_FREQ,
         indel_freq=INDEL_FREQ,
         min_depth=config['min_depth'],
@@ -329,12 +278,14 @@ rule lofreq_bcftools_setGT:
         bcftools index {input.vcf_file}
         bcftools +fill-tags {input.vcf_file} -Ou -- -t "TYPE" | \
         bcftools norm -Ou -a -m -  2> /dev/null | \
-        bcftools view -f 'PASS,.' -i "INFO/AF >= {params.snv_freq} & INFO/DP >= {params.min_depth}" -Oz -o {output.vcf_file}
-        bcftools index {output.vcf_file}
-        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
-        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.indel_freq}' -n . 2>> {log} | \
+        bcftools view -f 'PASS,.' -i "INFO/DP >= {params.min_depth}" -Oz -o {params.vcf_file}
+        bcftools index {params.vcf_file}
+        bcftools +setGT {params.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
+        bcftools +setGT -- -t q -i 'TYPE="indel" && INFO/AF < {params.indel_freq} || TYPE="SNP" && INFO/AF <= {params.snv_freq}' -n . 2>> {log} | \
         bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && INFO/AF >= {params.con_freq}' -n 'c:1/1' 2>> {log}
         bcftools index -f {output.vcf_file}
+        bcftools view -i "FORMAT/GT != 'mis'" {output.vcf_file} -Oz -o {params.clean_vcf}
+        bcftools index -f {params.clean_vcf}
         """
 
 rule freyja_depths:

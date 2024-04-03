@@ -104,7 +104,7 @@ def main(sysargs=sys.argv[1:]):
         "--consensus_freq",
         action="store",
         required=False,
-        help="Variant allele frequency threshold for a non-indel variant to be incorporated into consensus genome. Default: {}".format(
+        help="Variant allele frequency (VAF) threshold for a non-indel variant to be incorporated into consensus genome. Variants with a VAF less than the threshold will be incorporated as IUPAC ambiguities. Default: {}".format(
             float(0.75)
         ),
         metavar="<float>",
@@ -143,6 +143,7 @@ def main(sysargs=sys.argv[1:]):
     parser.add_argument(
         "-m",
         "--min_depth",
+        default=int(10),
         action="store",
         help="Minimum depth for (1) an SNV to be kept; and (2) consensus genome generation. Default: {}".format(int(10)),
     )
@@ -232,11 +233,11 @@ def main(sysargs=sys.argv[1:]):
         action="store_true",
         help="Output the quality control column names in 'legacy' format. Default: {}".format(False),
     )
-    parser.add_argument(
-        "--no_singularity",
-        action="store_true",
-        help="Stop the use of singularity. Default: {}".format(False),
-    )
+    # parser.add_argument(
+    #     "--no_singularity",
+    #     action="store_true",
+    #     help="Stop the use of singularity. Default: {}".format(False),
+    # )
     parser.add_argument(
         "--keep_reads", action="store_true", help="Keep trimmed reads", default=False
     )
@@ -259,10 +260,11 @@ def main(sysargs=sys.argv[1:]):
         default=False,
     )
     parser.add_argument(
-        "--snv_min",
+        "--snv_min_freq",
         action="store",
         required=False,
-        help="Suffix used to identify samples from reads. Default: {}".format(
+        default=0.25,
+        help="Variant allele frequency threshold for an SNV to be kept. Default: {}".format(
             0.25
         ),
         metavar="float",
@@ -405,12 +407,12 @@ def main(sysargs=sys.argv[1:]):
             )
             sys.exit(1)
 
-    snv_min = 0.25
-    if args.snv_min:
-        snv_min = float(args.snv_min)
-        if snv_min > 1 or snv_min < 0:
+    snv_min_freq = 0.25
+    if args.snv_min_freq:
+        snv_min_freq = float(args.snv_min_freq)
+        if snv_min_freq > 1 or snv_min_freq < 0:
             print(
-                "#####\n\033[91mError\033[0m: The snv_min option must be a float number between 0 and 1\n#####\n"
+                "#####\n\033[91mError\033[0m: The snv_min_freq option must be a float number between 0 and 1\n#####\n"
             )
             sys.exit(1)
 
@@ -472,7 +474,7 @@ def main(sysargs=sys.argv[1:]):
         "threads": args.threads,
         "consensus_freq": consensus_freq,
         "min_depth": min_depth,
-        "snv_min": snv_min,
+        "snv_min_freq": snv_min_freq,
         "indel_freq": indel_freq,
         "extra_pangolin_args": args.extra_pangolin_options,
         "keep_reads": args.keep_reads,

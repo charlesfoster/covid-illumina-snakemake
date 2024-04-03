@@ -190,9 +190,9 @@ rule ivar_variants:
         reference=REFERENCE,
         converter=CONVERTER,
         qual=20,
-        depth=10,
+        depth=config["min_depth"],
         con_freq=CON_FREQ,
-        snv_freq=0.1,
+        snv_freq=config["snv_min_freq"],
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*",
     conda:
@@ -204,53 +204,6 @@ rule ivar_variants:
         cat {input.mpileup} | ivar variants -p {params.prefix} -r {params.reference} -q {params.qual} -m {params.depth} -t {params.snv_freq} 2&>{log}
         python {params.converter} {params.tsv_file} {output.temp_vcf_file} 2> {log}
         """
-
-
-#rule lofreq_variants_orig:
-#    input:
-#        bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
-#    output:
-#        new_bam=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam")),
-#        new_bam_index=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.bam.bai")
-#        ),
-#        tmp_vcf1=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")
-#        ),
-#        tmp_vcf2=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz")
-#        ),
-#        tmp_vcf1_index=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz.tbi")
-#        ),
-#        tmp_vcf2_index=temp(
-#            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz.tbi")
-#        ),
-#    message:
-#        "calling variants for {wildcards.sample}"
-#    threads: 8
-#    log:
-#        os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.log"),
-#    params:
-#        vcf_script=VCF_MOD,
-#        prefix="{sample}",
-#        reference=REFERENCE,
-#        depth=10,
-#    wildcard_constraints:
-#        sample="(?!NC)(?!NEG).*",
-#    conda:
-#        "../envs/lofreq.yaml"
-#    resources:
-#        cpus=8,
-#    shell:
-#        """
-#        lofreq indelqual --dindel {input.bam} -f {params.reference} | \
-#        samtools sort -@ {threads} -o {output.new_bam} 2> /dev/null
-#        samtools index {output.new_bam}
-#        lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
-#        -f {params.reference} -o {output.tmp_vcf1} {output.new_bam} 2> {log}
-#        bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
-#        """
 
 rule lofreq_variants:
     input:
@@ -271,15 +224,11 @@ rule lofreq_variants:
         tmp_vcf1=temp(
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz")
         ),
-        tmp_vcf2=temp(
-            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz")
-        ),
+        lofreq_raw=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq_raw.vcf.gz"),
         tmp_vcf1_index=temp(
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp1.vcf.gz.tbi")
         ),
-        tmp_vcf2_index=temp(
-            os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz.tbi")
-        ),
+        lofreq_raw_index=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq_raw.vcf.gz.tbi"),
     message:
         "calling variants for {wildcards.sample}"
     threads: 8
@@ -303,12 +252,10 @@ rule lofreq_variants:
         samtools index {output.new_bam}
         lofreq indelqual --dindel {output.new_bam} -f {params.reference} -o {output.new_bam3} 2> /dev/null
         samtools index {output.new_bam3}
-        samtools index {output.new_bam3}
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam3} 2> {log}
-        bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.tmp_vcf2}
+        bash {params.vcf_script} -i {output.tmp_vcf1} -g 1 -o {output.lofreq_raw}
         """
-        #lofreq alnqual -b {output.new_bam2} {params.reference} > {output.new_bam3}
 
 rule lofreq_bcftools_setGT:
     input:
@@ -320,7 +267,7 @@ rule lofreq_bcftools_setGT:
     params:
         vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.raw.vcf.gz"),
         clean_vcf=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.clean.vcf.gz"),
-        snv_freq=config["snv_min"],
+        snv_freq=config["snv_min_freq"],
         con_freq=CON_FREQ,
         indel_freq=INDEL_FREQ,
         min_depth=config['min_depth'],
