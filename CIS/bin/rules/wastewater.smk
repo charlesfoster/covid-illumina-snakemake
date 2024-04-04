@@ -17,6 +17,21 @@ if config['use_date']:
 else:
     TODAY = pathlib.PurePath(config['reads_dir']).name
 
+
+if VARIANT_PROGRAM == "ivar":
+    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz")
+    demix_input = proper_vcf
+    setgt_input = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf")
+    setgt_input2 = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf.gz")
+elif VARIANT_PROGRAM == "lofreq":
+    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz")
+    demix_input = proper_vcf
+elif VARIANT_PROGRAM == "freyja":
+    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz")
+    demix_input = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.freyja_variants.tsv.gz")
+    setgt_input = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp_freyja.vcf")
+    setgt_input2 = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp_freyja.vcf.gz")
+
 rule bwa_map_sort:
     input:
         r1=os.path.join(RESULT_DIR, "{sample}/fastp/{sample}_trimmed_R1.fq.gz"),
@@ -320,16 +335,44 @@ rule freyja_update_dataset:
         touch {output.updated}
         """
 
+rule freyja_variants:
+    input:
+        bam=os.path.join(RESULT_DIR, "{sample}/ivar/{sample}.primertrim.sorted.bam"),
+        depths=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.depths"),
+        updated=os.path.join(RESULT_DIR, "freyja.updated.txt"),
+    output:
+        variants=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.freyja_variants.tsv.gz")),
+        vcf_file = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp_freyja.vcf")
+    params:
+        snv_freq=config["snv_min_freq"],
+        demix=os.path.join(RESULT_DIR, "{sample}/freyja/demixing_result.csv"),
+        barcodes = os.path.join(config['freyja_dataset'],"usher_barcodes.csv"),
+        reference = REFERENCE,
+        converter=CONVERTER,
+        variants=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.freyja_variants.tsv"),
+    log:
+        os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.freyja_variants.log"),
+    container:
+        "docker://quay.io/biocontainers/freyja:1.4.5--pyhdfd78af_0"
+    shell:
+        """
+        set +e
+        freyja --version > {log}
+        freyja variants --ref {params.reference} --variants {params.variants} --depths {input.depths} --minq 20 --varthresh {params.snv_freq} {input.bam}
+        python {params.converter} {params.variants} {output.vcf_file} 2> {log}
+        gzip -c {params.variants} > {output.variants}
+        set -e
+        """
 
 rule freyja_demix:
     input:
-        vcf=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz"),
+        variants = demix_input,
         depths=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.depths"),
         updated=os.path.join(RESULT_DIR, "freyja.updated.txt"),
     output:
         demix=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.demix"),
     params:
-        vcf=os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.vcf"),
+        variants=temp(os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.variants_unzipped")),
         demix=os.path.join(RESULT_DIR, "{sample}/freyja/demixing_result.csv"),
         barcodes = os.path.join(config['freyja_dataset'],"usher_barcodes.csv"),
     log:
@@ -339,9 +382,9 @@ rule freyja_demix:
     shell:
         """
         set +e
-        gunzip -c {input.vcf} > {params.vcf}
+        gunzip -c {input.variants} > {params.variants}
         freyja --version > {log}
-        freyja demix {params.vcf} {input.depths} --output {output.demix} --barcodes {params.barcodes} &>>{log} || touch {output.demix} 
+        freyja demix {params.variants} {input.depths} --output {output.demix} --barcodes {params.barcodes} &>>{log} || touch {output.demix} 
         set -e
         """
 
@@ -378,14 +421,14 @@ rule freyja_aggregate_and_plot:
 
 rule ivar_bcftools_setGT:
     input:
-        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf"),
+        vcf_file=setgt_input,
     output:
         variant_types=temp(
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.variant_types.txt.gz")
         ),
         hdr=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.hdr.txt")),
         vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz"),
-        tmp_vcf=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf.gz")),
+        tmp_vcf=temp(setgt_input2),
     log:
         os.path.join(RESULT_DIR, "{sample}/variants/{sample}.bcftools_setGT.log"),
     params:
@@ -412,14 +455,9 @@ rule ivar_bcftools_setGT:
         bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= {params.min_depth}' -n 'c:0/1' 2> {log}| \
         bcftools +setGT -- -t q -i 'TYPE="INDEL" && FORMAT/ALT_FREQ < {params.indel_freq}' -n . 2>> {log} | \
         bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= {params.con_freq} & INFO/DP >= {params.min_depth}' -n 'c:1/1' 2> {log}
+        bcftools view {output.vcf_file} | sed "s/ALT_FREQ/AF/g" | bcftools view -Oz -o {output.vcf_file}
         bcftools index -f {output.vcf_file}
         """
-
-
-if VARIANT_PROGRAM == "ivar":
-    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz")
-elif VARIANT_PROGRAM == "lofreq":
-    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz")
 
 
 rule generate_consensus:
@@ -446,6 +484,7 @@ rule generate_consensus:
         cpus=1,
     shell:
         """
+        bcftools index -f {input.vcf_file}
         bcftools query -f'%CHROM\t%POS0\t%END\n' {input.vcf_file} > {output.variants_bed}
         varCheck=$(file {output.variants_bed} | cut -f2 -d " ")
         if [ $varCheck == "empty" ]; then
@@ -479,6 +518,7 @@ rule amino_acid_consequences:
         cpus=1,
     shell:
         """
+        bcftools index -f {input.vcf}
         printf "reference\tsample_id\tgene\tnt_pos\tref\talt\teffect\taa_bcsq\taa_standard\tvaf\tdepth\n" > {output.tsv}
         bcftools csq -f {params.reference} -g {params.annotation} --force -pm {input.vcf} 2>{log} | \
         bcftools query -f'[%CHROM\t%SAMPLE\t%POS\t%REF\t%ALT\t%DP\t%AF\t%TBCSQ\n]' 2>{log} | \

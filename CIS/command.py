@@ -204,7 +204,7 @@ def main(sysargs=sys.argv[1:]):
         "-v",
         "--variant_caller",
         action="store",
-        help="Variant caller to use. Choices: 'lofreq' or 'ivar' Default: 'lofreq'",
+        help="Variant caller to use. Choices: 'lofreq', 'ivar' or 'freyja' (wastewater only). Default: 'lofreq'",
         default="lofreq",
     )
     parser.add_argument(
@@ -381,12 +381,17 @@ def main(sysargs=sys.argv[1:]):
         isolates = False
 
     if args.variant_caller:
-        if args.variant_caller not in ["lofreq", "ivar"]:
+        if args.variant_caller not in ["lofreq", "ivar", "freyja"]:
             print(
-                '#####\n\033[91mError\033[0m: Variant caller must be either "lofreq" or "ivar"\n#####\n'
+                '#####\n\033[91mError\033[0m: Variant caller must be "lofreq", "ivar", or "freyja" \n#####\n'
             )
             sys.exit(1)
         variant_caller = args.variant_caller
+        if variant_caller == "freyja" and args.workflow != "wastewater":
+            print(
+                '#####\n\033[91mError\033[0m: Variant caller "freyja" can only be used for wastewater workflow \n#####\n'
+            )
+            sys.exit(1)
     else:
         variant_caller = "lofreq"
 
