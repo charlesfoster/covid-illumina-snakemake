@@ -257,7 +257,7 @@ rule lofreq_variants:
 
 rule lofreq_bcftools_setGT:
     input:
-        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp2.vcf.gz"),
+        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq_raw.vcf.gz"),
     output:
         vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz"),
     log:

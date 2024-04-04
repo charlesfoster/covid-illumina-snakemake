@@ -447,10 +447,11 @@ def main(sysargs=sys.argv[1:]):
         print("Indexing {} with bwa".format(args.reference))
         os.system("bwa index {} 2> /dev/null".format(args.reference))
 
-    if args.no_singularity:
-        use_singularity = False
-    else:
-        use_singularity = True
+    # if args.no_singularity:
+    #     use_singularity = False
+    # else:
+    #     use_singularity = True
+    use_singularity = True
 
     snakefile = os.path.join(thisdir, "bin", "Snakefile")
 
