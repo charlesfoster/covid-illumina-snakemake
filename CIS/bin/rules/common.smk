@@ -68,9 +68,9 @@ def get_trim_names(wildcards):
     inFile = INPUT_TABLE.loc[(wildcards.sample), ["fq1", "fq2"]].dropna()
     return (
         "--in1 "
-        + inFile[0]
+        + inFile.iloc[0]
         + " --in2 "
-        + inFile[1]
+        + inFile.iloc[1]
         + " --out1 "
         + os.path.join(
             RESULT_DIR,
