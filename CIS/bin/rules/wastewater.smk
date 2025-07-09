@@ -19,7 +19,7 @@ else:
 
 
 if VARIANT_PROGRAM == "ivar":
-    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz")
+    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.final.vcf.gz")
     demix_input = proper_vcf
     setgt_input = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf")
     setgt_input2 = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf.gz")
@@ -27,7 +27,7 @@ elif VARIANT_PROGRAM == "lofreq":
     proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.lofreq.vcf.gz")
     demix_input = proper_vcf
 elif VARIANT_PROGRAM == "freyja":
-    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz")
+    proper_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.final.vcf.gz")
     demix_input = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.freyja_variants.tsv.gz")
     setgt_input = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp_freyja.vcf")
     setgt_input2 = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp_freyja.vcf.gz")
@@ -54,7 +54,7 @@ rule bwa_map_sort:
         bwa mem -t {threads} {params.reference} \
         {input.r1} {input.r2} 2> {log} | \
         samtools sort -@ {threads} 2> {log} | \
-        samtools view -@ {threads} -F 4 --write-index -o {output.bam} 2> /dev/null
+        samtools view -@ {threads} -F 4 --write-index -o {output.bam} 
         samtools index {output.bam}
         """
 
@@ -87,7 +87,7 @@ rule ivar_trim:
         """
         touch {output.sort_trim_bam}
         ivar trim -i {input.bam} -x {params.offset} -b {params.bedfile} -p {params.prefix} -e 2&> {log}
-        samtools sort -@ {threads} {params.trim_bam} -o {output.sort_trim_bam} 2> /dev/null
+        samtools sort -@ {threads} {params.trim_bam} -o {output.sort_trim_bam} 
         samtools index {output.sort_trim_bam}
         """
 
@@ -121,7 +121,7 @@ rule genomecov:
     shell:
         """
         touch {output.amp_plot}
-        bedtools genomecov -ibam {input.bam} -d > {params.coverage}  2> /dev/null
+        bedtools genomecov -ibam {input.bam} -d > {params.coverage}  
         touch {output.main_plot} {output.amp_plot}
         """
 
@@ -261,9 +261,9 @@ rule lofreq_variants:
     shell:
         """
         lofreq viterbi -f {params.reference} {input.bam} | \
-        samtools sort -@ {threads} -o {output.new_bam} 2> /dev/null
+        samtools sort -@ {threads} -o {output.new_bam} 
         samtools index {output.new_bam}
-        lofreq indelqual --dindel {output.new_bam} -f {params.reference} -o {output.new_bam3} 2> /dev/null
+        lofreq indelqual --dindel {output.new_bam} -f {params.reference} -o {output.new_bam3} 
         samtools index {output.new_bam3}
         lofreq call-parallel --no-baq --call-indels --pp-threads {threads} \
         -f {params.reference} -o {output.tmp_vcf1} {output.new_bam3} 2> {log}
@@ -292,7 +292,7 @@ rule lofreq_bcftools_setGT:
         """
         bcftools index {input.vcf_file}
         bcftools +fill-tags {input.vcf_file} -Ou -- -t "TYPE" | \
-        bcftools norm -Ou -a -m -  2> /dev/null | \
+        bcftools norm -Ou -a -m -   | \
         bcftools view -f 'PASS,.' -i "INFO/DP >= {params.min_depth}" -Oz -o {params.vcf_file}
         bcftools index {params.vcf_file}
         bcftools +setGT {params.vcf_file} -- -t q -i 'GT="1" && INFO/AF < {params.con_freq}' -n 'c:0/1' 2>> {log} | \
@@ -318,7 +318,7 @@ rule freyja_depths:
         sample="(?!NC)(?!NEG).*",
     shell:
         """
-        samtools mpileup -aa -A -d 600000 -Q 20 -q 0 -B -f  {params.reference}  {input.bam} 2> /dev/null | cut -f1-4 > {output.depths}
+        samtools mpileup -aa -A -d 600000 -Q 20 -q 0 -B -f  {params.reference}  {input.bam}  | cut -f1-4 > {output.depths} 2>/dev/null
         """
 
 rule freyja_update_dataset:
@@ -327,7 +327,7 @@ rule freyja_update_dataset:
     params:
         location = config['freyja_dataset']
     container:
-        "docker://quay.io/biocontainers/freyja:1.4.5--pyhdfd78af_0"
+        "docker://staphb/freyja:1.5.3-07_07_2025-00-43-2025-07-07"
     shell:
         """
         mkdir -p {params.location}
@@ -353,7 +353,7 @@ rule freyja_variants:
     log:
         os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.freyja_variants.log"),
     container:
-        "docker://quay.io/biocontainers/freyja:1.4.5--pyhdfd78af_0"
+        "docker://staphb/freyja:1.5.3-07_07_2025-00-43-2025-07-07"
     shell:
         """
         set +e
@@ -378,7 +378,7 @@ rule freyja_demix:
     log:
         os.path.join(RESULT_DIR, "{sample}/freyja/{sample}.freyja_demix.log"),
     container:
-        "docker://quay.io/biocontainers/freyja:1.4.5--pyhdfd78af_0"
+        "docker://staphb/freyja:1.5.3-07_07_2025-00-43-2025-07-07"
     shell:
         """
         set +e
@@ -402,7 +402,7 @@ rule freyja_aggregate_and_plot:
         agg=os.path.join(RESULT_DIR, "freyja_aggregated","freyja_aggregated.tsv"),
         outdir = os.path.join(RESULT_DIR, "freyja_aggregated"),
     container:
-        "docker://quay.io/biocontainers/freyja:1.4.5--pyhdfd78af_0"
+        "docker://staphb/freyja:1.5.3-07_07_2025-00-43-2025-07-07"
     shell:
         """
         for ff in {input.demix_files}; do
@@ -427,7 +427,7 @@ rule ivar_bcftools_setGT:
             os.path.join(RESULT_DIR, "{sample}/variants/{sample}.variant_types.txt.gz")
         ),
         hdr=temp(os.path.join(RESULT_DIR, "{sample}/variants/{sample}.hdr.txt")),
-        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.ivar.vcf.gz"),
+        vcf_file=os.path.join(RESULT_DIR, "{sample}/variants/{sample}.final.vcf.gz"),
         tmp_vcf=temp(setgt_input2),
     log:
         os.path.join(RESULT_DIR, "{sample}/variants/{sample}.bcftools_setGT.log"),
@@ -436,25 +436,27 @@ rule ivar_bcftools_setGT:
         con_freq=CON_FREQ,
         indel_freq=INDEL_FREQ,
         min_depth=config['min_depth'],
+        tmp_vcf = os.path.join(RESULT_DIR, "{sample}/variants/{sample}.tmp.vcf.gz"),
     message:
         "setting conditional GT for {wildcards.sample}"
     wildcard_constraints:
         sample="(?!NC)(?!NEG).*",
     shell:
         """
-        bgzip -f {input.vcf_file}
+        bgzip -c {input.vcf_file} > {output.tmp_vcf}
         bcftools index {output.tmp_vcf}
         bcftools query {output.tmp_vcf} -f'%CHROM\t%POS\t%TYPE\n' | bgzip > {output.variant_types}
         tabix -s1 -b2 -e2 {output.variant_types}
         echo '##INFO=<ID=TYPE,Number=.,Type=String,Description="Variant type">' > {output.hdr}
-        bcftools annotate -a {output.variant_types} -h {output.hdr} -c CHROM,POS,TYPE -Oz -o {output.tmp_vcf} {output.tmp_vcf}
+        bcftools annotate -a {output.variant_types} -h {output.hdr} -c CHROM,POS,TYPE -Oz -o {params.tmp_vcf} {output.tmp_vcf} && mv {params.tmp_vcf} {output.tmp_vcf}
         bcftools index -f {output.tmp_vcf}
         bcftools norm -Ou -a -m - {output.tmp_vcf} 2> {log} | \
-        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= {params.min_depth}" -Oz -o {output.vcf_file}
-        bcftools index {output.vcf_file}
-        bcftools +setGT {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= {params.min_depth}' -n 'c:0/1' 2> {log}| \
+        bcftools view -i "FORMAT/ALT_FREQ >= {params.snv_freq} & FORMAT/ALT_QUAL >= 20 & INFO/DP >= {params.min_depth}" -Oz -o {params.tmp_vcf} {output.tmp_vcf} && mv {params.tmp_vcf} {output.tmp_vcf}
+        bcftools index -f {output.tmp_vcf}
+        bcftools +setGT {output.tmp_vcf} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ < {params.con_freq} & INFO/DP >= {params.min_depth}' -n 'c:0/1' 2> {log}| \
         bcftools +setGT -- -t q -i 'TYPE="INDEL" && FORMAT/ALT_FREQ < {params.indel_freq}' -n . 2>> {log} | \
         bcftools +setGT -o {output.vcf_file} -- -t q -i 'GT="1" && FORMAT/ALT_FREQ >= {params.con_freq} & INFO/DP >= {params.min_depth}' -n 'c:1/1' 2> {log}
+        bcftools index -f {output.vcf_file}
         bcftools view {output.vcf_file} | sed "s/ALT_FREQ/AF/g" | bcftools view -Oz -o {output.vcf_file}
         bcftools index -f {output.vcf_file}
         """
@@ -589,7 +591,7 @@ rule update_nextclade:
     params:
         nextclade_dataset = config['nextclade_dataset']
     container:
-        "docker://nextstrain/nextclade:2.9.1"
+        "docker://nextstrain/nextclade:3.15.3"
     shell:
         """
         echo "nextclade version:" | tee -a {output.update_info}
@@ -607,7 +609,7 @@ rule nextclade:
     params:
         nextclade_dataset = config['nextclade_dataset'],
     container:
-        "docker://nextstrain/nextclade:2.9.1"
+        "docker://nextstrain/nextclade:3.15.3"
     resources:
         cpus=1,
     threads: 4,

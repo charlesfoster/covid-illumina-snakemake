@@ -109,13 +109,13 @@ if config["workflow"] == "wastewater":
             freyja_plot = os.path.join(RESULT_DIR, "freyja_aggregated","freyja_plot.pdf"),
             report=os.path.join(RESULT_DIR, TODAY + "_softwareVersions.txt"),
         params:
-            temp_qc = temp(os.path.join(RESULT_DIR, TODAY + "_temp_QC.csv")),
         output:
             qc_file=report(
                 os.path.join(RESULT_DIR, TODAY + "_QC.csv"),
                 caption="report/final_qc.rst",
                 category="Final QC",
             ),
+            temp_qc = temp(os.path.join(RESULT_DIR, TODAY + "_temp_QC.csv")),
         message:
             "Pipeline complete!"
         run:
@@ -135,11 +135,11 @@ if config["workflow"] == "wastewater":
             qc_files = glob.glob(RESULT_DIR + "/*qc_results.csv")
             combined_csv = pd.concat([pd.read_csv(f) for f in qc_files])
             combined_csv.to_csv(
-                params.temp_qc, index=False, header=True
+                output.temp_qc, index=False, header=True
             )
             
             # run pango-collapse
-            cmd = "pango-collapse --output {0} --lineage-column lineage {1} > /dev/null".format(output.qc_file, params.temp_qc)
+            cmd = "pango-collapse --output {0} --lineage-column lineage {1} > /dev/null".format(output.qc_file, output.temp_qc)
             os.system(cmd)
             
             # write out config
